@@ -1,6 +1,6 @@
 import express from "express";
 import path from "node:path";
-import { access } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { runMigrations } from "./db/migrate.mjs";
 import { closeDbPool } from "./db/connection.mjs";
 import { nowIso } from "./utils/datetime.mjs";
@@ -122,20 +122,9 @@ function validateRuntimeConfig() {
   }
 }
 
-validateRuntimeConfig();
-
-async function fileExists(filePath) {
-  try {
-    await access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 const app = express();
 app.set("trust proxy", true);
-const HAS_DIST = await fileExists(DIST_INDEX_FILE);
+const HAS_DIST = existsSync(DIST_INDEX_FILE);
 if (HAS_DIST) {
   app.use(
     express.static(DIST_DIR, {
@@ -894,36 +883,58 @@ app.use(async (req, res) => {
   }
 });
 
-// eslint-disable-next-line no-console
-console.log("Server starting...");
-// eslint-disable-next-line no-console
-console.log("PORT:", PORT);
+async function startServer() {
+  // eslint-disable-next-line no-console
+  console.log("Server starting...");
+  // eslint-disable-next-line no-console
+  console.log("PORT:", PORT);
+  // eslint-disable-next-line no-console
+  console.log("HOST:", HOST);
 
-await runMigrations();
-await bootstrapAdminIfMissing();
-await getSiteContentState();
+  validateRuntimeConfig();
 
-const server = app.listen(PORT, HOST, () => {
+  await runMigrations();
+  await bootstrapAdminIfMissing();
+  await getSiteContentState();
+
+  const server = app.listen(PORT, HOST, () => {
+    // eslint-disable-next-line no-console
+    console.log(`MenaInsight backend running on http://${HOST}:${PORT}`);
+    // eslint-disable-next-line no-console
+    console.log(`Environment: ${NODE_ENV}`);
+    // eslint-disable-next-line no-console
+    console.log(`CORS allow origin: ${CORS_ALLOW_ORIGIN}`);
+    // eslint-disable-next-line no-console
+    console.log(`PayPal mode: ${PAYPAL_CONFIG.mode}`);
+    // eslint-disable-next-line no-console
+    console.log(`PayPal configured: ${isPaypalConfigured() ? "yes" : "no"}`);
+  });
+
+  for (const signal of ["SIGINT", "SIGTERM"]) {
+    process.on(signal, async () => {
+      try {
+        await closeDbPool();
+      } catch {
+        // no-op
+      } finally {
+        server.close(() => process.exit(0));
+      }
+    });
+  }
+}
+
+process.on("uncaughtException", (error) => {
   // eslint-disable-next-line no-console
-  console.log(`MenaInsight backend running on http://${HOST}:${PORT}`);
-  // eslint-disable-next-line no-console
-  console.log(`Environment: ${NODE_ENV}`);
-  // eslint-disable-next-line no-console
-  console.log(`CORS allow origin: ${CORS_ALLOW_ORIGIN}`);
-  // eslint-disable-next-line no-console
-  console.log(`PayPal mode: ${PAYPAL_CONFIG.mode}`);
-  // eslint-disable-next-line no-console
-  console.log(`PayPal configured: ${isPaypalConfigured() ? "yes" : "no"}`);
+  console.error("Uncaught exception during runtime:", error);
 });
 
-for (const signal of ["SIGINT", "SIGTERM"]) {
-  process.on(signal, async () => {
-    try {
-      await closeDbPool();
-    } catch {
-      // no-op
-    } finally {
-      process.exit(0);
-    }
-  });
-}
+process.on("unhandledRejection", (error) => {
+  // eslint-disable-next-line no-console
+  console.error("Unhandled promise rejection during runtime:", error);
+});
+
+startServer().catch((error) => {
+  // eslint-disable-next-line no-console
+  console.error("Fatal startup error:", error);
+  process.exit(1);
+});

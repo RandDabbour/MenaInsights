@@ -1,4 +1,6 @@
-import http from "node:http";
+import express from "express";
+import path from "node:path";
+import { access } from "node:fs/promises";
 import { runMigrations } from "./db/migrate.mjs";
 import { closeDbPool } from "./db/connection.mjs";
 import { nowIso } from "./utils/datetime.mjs";
@@ -64,15 +66,17 @@ import {
   toPublicUploadPath,
 } from "./lib/uploads.mjs";
 
-const PORT = Number(process.env.PORT || 8787);
-const HOST = process.env.HOST || "127.0.0.1";
 const NODE_ENV = process.env.NODE_ENV || "development";
 const IS_PRODUCTION = NODE_ENV === "production";
-const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || "http://localhost:5173";
-const CORS_ALLOW_ORIGIN = process.env.CORS_ALLOW_ORIGIN || PUBLIC_BASE_URL;
+const PORT = Number(process.env.PORT || 3000);
+const HOST = process.env.HOST || (IS_PRODUCTION ? "0.0.0.0" : "127.0.0.1");
+const PUBLIC_BASE_URL = String(process.env.PUBLIC_BASE_URL || (IS_PRODUCTION ? "" : "http://localhost:5173")).trim();
+const CORS_ALLOW_ORIGIN = String(process.env.CORS_ALLOW_ORIGIN || PUBLIC_BASE_URL || "*").trim();
 const JWT_SECRET = String(process.env.JWT_SECRET || "");
 const PAYPAL_WEBHOOK_ID = String(process.env.PAYPAL_WEBHOOK_ID || "").trim();
 const PAYPAL_CONFIG = getPaypalPublicConfig();
+const DIST_DIR = path.join(process.cwd(), "dist");
+const DIST_INDEX_FILE = path.join(DIST_DIR, "index.html");
 
 function looksLikeProductionLocalhost(value) {
   const next = String(value || "").toLowerCase();
@@ -94,6 +98,12 @@ function validateRuntimeConfig() {
   if (!JWT_SECRET) {
     missing.push("JWT_SECRET");
   }
+  if (!PUBLIC_BASE_URL) {
+    missing.push("PUBLIC_BASE_URL");
+  }
+  if (!CORS_ALLOW_ORIGIN) {
+    missing.push("CORS_ALLOW_ORIGIN");
+  }
   if (!isPaypalConfigured()) {
     missing.push("PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET");
   }
@@ -104,15 +114,36 @@ function validateRuntimeConfig() {
     throw new Error(`Missing required env vars in production: ${missing.join(", ")}`);
   }
 
-  if (looksLikeProductionLocalhost(PUBLIC_BASE_URL)) {
+  if (PUBLIC_BASE_URL && looksLikeProductionLocalhost(PUBLIC_BASE_URL)) {
     throw new Error("PUBLIC_BASE_URL cannot point to localhost in production.");
   }
-  if (looksLikeProductionLocalhost(CORS_ALLOW_ORIGIN)) {
+  if (CORS_ALLOW_ORIGIN && looksLikeProductionLocalhost(CORS_ALLOW_ORIGIN)) {
     throw new Error("CORS_ALLOW_ORIGIN cannot point to localhost in production.");
   }
 }
 
 validateRuntimeConfig();
+
+async function fileExists(filePath) {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const app = express();
+app.set("trust proxy", true);
+const HAS_DIST = await fileExists(DIST_INDEX_FILE);
+if (HAS_DIST) {
+  app.use(
+    express.static(DIST_DIR, {
+      index: false,
+      maxAge: IS_PRODUCTION ? "1h" : 0,
+    }),
+  );
+}
 
 const rateLimitBuckets = new Map();
 function takeRateLimitToken(key, { limit, windowMs }) {
@@ -740,14 +771,14 @@ async function handleAdminApi(req, res, pathname) {
   sendJson(res, 404, { error: "Admin endpoint not found" });
 }
 
-const server = http.createServer(async (req, res) => {
+app.use(async (req, res) => {
   try {
     if (req.method === "OPTIONS") {
       sendNoContent(res);
       return;
     }
 
-    const url = new URL(req.url || "/", "http://localhost");
+    const url = new URL(req.url || "/", "http://internal");
     const pathname = url.pathname;
 
     if (req.method === "GET") {
@@ -844,6 +875,11 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && HAS_DIST && !pathname.startsWith("/api/")) {
+      res.sendFile(DIST_INDEX_FILE);
+      return;
+    }
+
     sendJson(res, 404, { error: "Not found" });
   } catch (error) {
     if (!IS_PRODUCTION) {
@@ -858,11 +894,16 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+// eslint-disable-next-line no-console
+console.log("Server starting...");
+// eslint-disable-next-line no-console
+console.log("PORT:", PORT);
+
 await runMigrations();
 await bootstrapAdminIfMissing();
 await getSiteContentState();
 
-server.listen(PORT, HOST, () => {
+const server = app.listen(PORT, HOST, () => {
   // eslint-disable-next-line no-console
   console.log(`MenaInsight backend running on http://${HOST}:${PORT}`);
   // eslint-disable-next-line no-console

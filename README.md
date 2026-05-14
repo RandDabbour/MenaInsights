@@ -17,7 +17,7 @@
 7. Start frontend:
 `npm run dev`
 
-Frontend runs on `http://localhost:5173`, backend on `http://localhost:8787`.
+Frontend runs on `http://localhost:5173`, backend on `http://localhost:3000` (default).
 
 ## Database
 
@@ -44,8 +44,16 @@ Additional operational tables:
 - `npm run db:migrate` - apply SQL migrations
 - `npm run db:import` - import legacy JSON data into relational tables
 - `npm run db:backup` - backup DB using `mysqldump` into `server/backups`
+- `npm start` - start backend using Hostinger-compatible entry (`server.js`)
 - `npm run server` - start backend API
 - `npm run dev` - start frontend
+
+## Hostinger deployment
+
+- Node.js entry file: `server.js`
+- `server.js` imports `./server/index.mjs` and starts the app.
+- Backend listens on `process.env.PORT` with local fallback `3000`.
+- In production, if `dist/` exists, backend serves it statically and falls back to `dist/index.html` for SPA routes.
 
 ## Security
 

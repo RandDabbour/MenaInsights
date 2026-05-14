@@ -1,6 +1,7 @@
 import express from "express";
 import path from "node:path";
 import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { runMigrations } from "./db/migrate.mjs";
 import { closeDbPool } from "./db/connection.mjs";
 import { nowIso } from "./utils/datetime.mjs";
@@ -75,7 +76,10 @@ const CORS_ALLOW_ORIGIN = String(process.env.CORS_ALLOW_ORIGIN || PUBLIC_BASE_UR
 const JWT_SECRET = String(process.env.JWT_SECRET || "");
 const PAYPAL_WEBHOOK_ID = String(process.env.PAYPAL_WEBHOOK_ID || "").trim();
 const PAYPAL_CONFIG = getPaypalPublicConfig();
-const DIST_DIR = path.join(process.cwd(), "dist");
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const projectRoot = path.resolve(__dirname, "..");
+const DIST_DIR = path.join(projectRoot, "dist");
 const DIST_INDEX_FILE = path.join(DIST_DIR, "index.html");
 
 function looksLikeProductionLocalhost(value) {
@@ -125,7 +129,7 @@ function validateRuntimeConfig() {
 const app = express();
 app.set("trust proxy", true);
 const HAS_DIST = existsSync(DIST_INDEX_FILE);
-if (HAS_DIST) {
+if (IS_PRODUCTION && HAS_DIST) {
   app.use(
     express.static(DIST_DIR, {
       index: false,
@@ -760,7 +764,7 @@ async function handleAdminApi(req, res, pathname) {
   sendJson(res, 404, { error: "Admin endpoint not found" });
 }
 
-app.use(async (req, res) => {
+app.use(async (req, res, next) => {
   try {
     if (req.method === "OPTIONS") {
       sendNoContent(res);
@@ -864,12 +868,12 @@ app.use(async (req, res) => {
       return;
     }
 
-    if (req.method === "GET" && HAS_DIST && !pathname.startsWith("/api/")) {
-      res.sendFile(DIST_INDEX_FILE);
+    if (pathname.startsWith("/api/")) {
+      sendJson(res, 404, { error: "Not found" });
       return;
     }
 
-    sendJson(res, 404, { error: "Not found" });
+    next();
   } catch (error) {
     if (!IS_PRODUCTION) {
       // eslint-disable-next-line no-console
@@ -883,6 +887,16 @@ app.use(async (req, res) => {
   }
 });
 
+if (IS_PRODUCTION && HAS_DIST) {
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api")) {
+      next();
+      return;
+    }
+    res.sendFile(DIST_INDEX_FILE);
+  });
+}
+
 async function startServer() {
   // eslint-disable-next-line no-console
   console.log("Server starting...");
@@ -890,6 +904,8 @@ async function startServer() {
   console.log("PORT:", PORT);
   // eslint-disable-next-line no-console
   console.log("HOST:", HOST);
+  // eslint-disable-next-line no-console
+  console.log("Serving frontend from:", DIST_DIR);
 
   validateRuntimeConfig();
 

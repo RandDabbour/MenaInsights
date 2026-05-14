@@ -1,0 +1,30 @@
+{
+  "admins": [
+    {
+      "id": "2e53f169-cc91-4895-aec4-628e555674c1",
+      "name": "Site Owner",
+      "email": "save_nature1986@yahoo.com",
+      "passwordHash": "41c449ace8d8e786c10dc73627fbeb86:076751b88e06c13bc6f5d2872cc91dde6f66fa9987b77c26f69d37d02e29eb4c5e665dfe4277af7b60875f490caa2f3452c27c3afc688ecf10dc8bf3116d6743",
+      "createdAt": "2026-04-25T00:03:06.201Z"
+    }
+  ],
+  "adminSessions": [
+    {
+      "id": "93f260e2-3bf1-4e25-94e2-b8ab93bbad84",
+      "adminId": "2e53f169-cc91-4895-aec4-628e555674c1",
+      "tokenHash": "d20236d36eaf47c87c94c6a5876ba1d32d7e3abfbf15ce2370996590b0532455",
+      "createdAt": "2026-04-25T22:18:04.401Z",
+      "expiresAt": "2026-04-26T10:18:04.399Z"
+    }
+  ],
+  "content": {
+    "homepage": {
+      "heroImage": "",
+      "heroAlt": "Middle East Media Insights hero"
+    },
+    "siteContent": {},
+    "updatedAt": ""
+  },
+  "requests": [],
+  "emailOutbox": []
+}

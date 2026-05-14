@@ -1,6 +1,6 @@
 import express from "express";
 import path from "node:path";
-import { existsSync } from "node:fs";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { runMigrations } from "./db/migrate.mjs";
 import { closeDbPool } from "./db/connection.mjs";
@@ -80,7 +80,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "..");
 const DIST_DIR = path.join(projectRoot, "dist");
-const DIST_INDEX_FILE = path.join(DIST_DIR, "index.html");
 
 function looksLikeProductionLocalhost(value) {
   const next = String(value || "").toLowerCase();
@@ -128,15 +127,6 @@ function validateRuntimeConfig() {
 
 const app = express();
 app.set("trust proxy", true);
-const HAS_DIST = existsSync(DIST_INDEX_FILE);
-if (IS_PRODUCTION && HAS_DIST) {
-  app.use(
-    express.static(DIST_DIR, {
-      index: false,
-      maxAge: IS_PRODUCTION ? "1h" : 0,
-    }),
-  );
-}
 
 const rateLimitBuckets = new Map();
 function takeRateLimitToken(key, { limit, windowMs }) {
@@ -887,15 +877,16 @@ app.use(async (req, res, next) => {
   }
 });
 
-if (IS_PRODUCTION && HAS_DIST) {
-  app.get("*", (req, res, next) => {
-    if (req.path.startsWith("/api")) {
-      next();
-      return;
-    }
-    res.sendFile(DIST_INDEX_FILE);
+if (IS_PRODUCTION) {
+  app.use(express.static(DIST_DIR));
+  app.get(/^\/(?!api).*/, (req, res) => {
+    res.sendFile(path.join(DIST_DIR, "index.html"));
   });
 }
+
+app.use((req, res) => {
+  sendJson(res, 404, { error: "Not found" });
+});
 
 async function startServer() {
   // eslint-disable-next-line no-console
@@ -906,6 +897,10 @@ async function startServer() {
   console.log("HOST:", HOST);
   // eslint-disable-next-line no-console
   console.log("Serving frontend from:", DIST_DIR);
+  // eslint-disable-next-line no-console
+  console.log("Production static dir:", DIST_DIR);
+  // eslint-disable-next-line no-console
+  console.log("Production index exists:", fs.existsSync(path.join(DIST_DIR, "index.html")));
 
   validateRuntimeConfig();
 

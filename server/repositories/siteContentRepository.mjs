@@ -40,7 +40,7 @@ export async function upsertGlobalSiteContent({ data, updatedByUserId, updatedAt
   const payload = JSON.stringify(data || {});
   await execute(
     `INSERT INTO site_content (content_key, content_type, content_text, content_json, updated_by_user_id, created_at, updated_at)
-     VALUES (?, 'json', NULL, CAST(? AS JSON), ?, ?, ?)
+     VALUES (?, 'json', NULL, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
        content_type = VALUES(content_type),
        content_text = VALUES(content_text),

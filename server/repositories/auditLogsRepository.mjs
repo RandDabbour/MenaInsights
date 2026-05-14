@@ -6,7 +6,7 @@ export async function createAuditLog(entry) {
   await execute(
     `INSERT INTO audit_logs
       (id, actor_user_id, action, entity_type, entity_id, metadata_json, ip_address, created_at)
-     VALUES (?, ?, ?, ?, ?, CAST(? AS JSON), ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       entry.id || randomUUID(),
       entry.actorUserId || null,

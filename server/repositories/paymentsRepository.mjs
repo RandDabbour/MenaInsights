@@ -72,7 +72,7 @@ export async function upsertPayment(connection, paymentRecord) {
       connection,
       `INSERT INTO payments
         (id, request_id, method, status, amount, currency, paypal_order_id, paypal_capture_id, raw_provider_response, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         paymentRecord.id || randomUUID(),
         paymentRecord.requestId,
@@ -99,7 +99,7 @@ export async function upsertPayment(connection, paymentRecord) {
            currency = ?,
            paypal_order_id = ?,
            paypal_capture_id = ?,
-           raw_provider_response = CAST(? AS JSON),
+           raw_provider_response = ?,
            updated_at = ?
      WHERE request_id = ?`,
     [

@@ -148,7 +148,7 @@ async function importData(data) {
     await connection.execute(
       `INSERT INTO site_content
         (content_key, content_type, content_text, content_json, updated_by_user_id, created_at, updated_at)
-       VALUES ('global', 'json', NULL, CAST(? AS JSON), NULL, ?, ?)
+       VALUES ('global', 'json', NULL, ?, NULL, ?, ?)
        ON DUPLICATE KEY UPDATE
          content_json = VALUES(content_json),
          updated_at = VALUES(updated_at)`,
@@ -223,7 +223,7 @@ async function importData(data) {
       await connection.execute(
         `INSERT INTO payments
           (id, request_id, method, status, amount, currency, paypal_order_id, paypal_capture_id, raw_provider_response, created_at, updated_at)
-         VALUES (?, ?, 'paypal', ?, ?, ?, ?, ?, CAST(? AS JSON), ?, ?)
+         VALUES (?, ?, 'paypal', ?, ?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE
           method = VALUES(method),
           status = VALUES(status),
@@ -278,7 +278,7 @@ async function importData(data) {
       await connection.execute(
         `INSERT INTO email_outbox
           (id, recipient_email, subject, text_body, html_body, metadata_json, queued_at, sent_at, status, error_message)
-         VALUES (?, ?, ?, ?, ?, CAST(? AS JSON), ?, ?, ?, ?)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE
            status = VALUES(status),
            sent_at = VALUES(sent_at),

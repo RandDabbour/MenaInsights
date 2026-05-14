@@ -36,7 +36,7 @@ export async function enqueueEmail(item) {
   await execute(
     `INSERT INTO email_outbox
       (id, recipient_email, subject, text_body, html_body, metadata_json, queued_at, sent_at, status, error_message)
-     VALUES (?, ?, ?, ?, ?, CAST(? AS JSON), ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       item.to,

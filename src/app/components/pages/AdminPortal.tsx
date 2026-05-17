@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Image as ImageIcon, Link2, Mail, Type as TypeIcon } from "lucide-react";
 import {
   DEFAULT_SITE_CONTENT,
@@ -137,13 +137,6 @@ type HeroOverlaySettings = {
   title: string;
   subtitle: string;
   imageOpacity: number;
-};
-
-type VisualPreviewSection = {
-  key: string;
-  title: string;
-  description: string;
-  render: () => ReactNode;
 };
 
 type FlatField = {
@@ -714,7 +707,6 @@ export function AdminPortal() {
   const [contentSaved, setContentSaved] = useState("");
   const [activeContentSection, setActiveContentSection] = useState("header");
   const [activeFieldKind, setActiveFieldKind] = useState<"all" | FieldKind>("all");
-  const [expandedPreviewSections, setExpandedPreviewSections] = useState<string[]>(["homepage"]);
 
   const [settingsEmail, setSettingsEmail] = useState("");
   const [settingsCurrentPassword, setSettingsCurrentPassword] = useState("");
@@ -1252,11 +1244,6 @@ export function AdminPortal() {
     [contentDraft],
   );
 
-  const currentHeroOverlay = useMemo(
-    () => normalizeHeroOverlaySettings(getByPath(contentState, "siteContent.pages.homepage.heroOverlay")),
-    [contentState],
-  );
-
   const footerLinkEditors = [
     {
       title: "Footer Services Links",
@@ -1459,257 +1446,54 @@ export function AdminPortal() {
     }
   };
 
-  const visualPreviewSections = useMemo<VisualPreviewSection[]>(
-    () => [
-      {
-        key: "header",
-        title: "Header",
-        description: "Top navigation and brand.",
-        render: () => <Header preview />,
-      },
-      {
-        key: "homepage",
-        title: "Homepage",
-        description: "Hero + all homepage sections + footer.",
-        render: () => (
-          <div className="bg-white">
-            <Header preview />
-            <Homepage />
-            <Footer />
+  const renderPreviewSection = (sectionKey: string) => {
+    switch (sectionKey) {
+      case "header":
+        return <Header preview />;
+      case "footer":
+        return <Footer />;
+      case "homepage":
+        return <Homepage />;
+      case "about":
+        return <About />;
+      case "insights":
+        return <Insights />;
+      case "media-landscapes":
+        return <MediaLandscapes />;
+      case "profiles":
+        return <Profiles />;
+      case "services":
+        return <Services />;
+      case "strategic-briefs":
+        return <StrategicBriefs />;
+      case "request-analysis":
+        return <RequestAnalysis />;
+      case "contact":
+        return <Contact />;
+      case "privacy":
+        return <Privacy />;
+      case "terms":
+        return <Terms />;
+      case "payment-policy":
+        return <PaymentPolicy />;
+      default:
+        return (
+          <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-5 text-xs text-gray-500">
+            This section contains mixed/global fields. Select a specific section to get a visual preview.
           </div>
-        ),
-      },
-      {
-        key: "about",
-        title: "About",
-        description: "About page full layout.",
-        render: () => (
-          <div className="bg-white">
-            <Header preview />
-            <About />
-            <Footer />
-          </div>
-        ),
-      },
-      {
-        key: "insights",
-        title: "Insights",
-        description: "Insights page with categories and cards.",
-        render: () => (
-          <div className="bg-white">
-            <Header preview />
-            <Insights />
-            <Footer />
-          </div>
-        ),
-      },
-      {
-        key: "media-landscapes",
-        title: "Media Landscapes",
-        description: "Regions, report includes, and request card.",
-        render: () => (
-          <div className="bg-white">
-            <Header preview />
-            <MediaLandscapes />
-            <Footer />
-          </div>
-        ),
-      },
-      {
-        key: "profiles",
-        title: "Profiles",
-        description: "Profile types and CTA sections.",
-        render: () => (
-          <div className="bg-white">
-            <Header preview />
-            <Profiles />
-            <Footer />
-          </div>
-        ),
-      },
-      {
-        key: "services",
-        title: "Services",
-        description: "Services cards, process, and CTA.",
-        render: () => (
-          <div className="bg-white">
-            <Header preview />
-            <Services />
-            <Footer />
-          </div>
-        ),
-      },
-      {
-        key: "strategic-briefs",
-        title: "Strategic Briefs",
-        description: "Brief types, inclusions, and sample briefs.",
-        render: () => (
-          <div className="bg-white">
-            <Header preview />
-            <StrategicBriefs />
-            <Footer />
-          </div>
-        ),
-      },
-      {
-        key: "request-analysis",
-        title: "Request Analysis",
-        description: "Public request form and field labels.",
-        render: () => (
-          <div className="bg-white">
-            <Header preview />
-            <RequestAnalysis />
-            <Footer />
-          </div>
-        ),
-      },
-      {
-        key: "contact",
-        title: "Contact",
-        description: "Contact channels and form layout.",
-        render: () => (
-          <div className="bg-white">
-            <Header preview />
-            <Contact />
-            <Footer />
-          </div>
-        ),
-      },
-      {
-        key: "privacy",
-        title: "Privacy",
-        description: "Privacy legal page.",
-        render: () => (
-          <div className="bg-white">
-            <Header preview />
-            <Privacy />
-            <Footer />
-          </div>
-        ),
-      },
-      {
-        key: "terms",
-        title: "Terms",
-        description: "Terms legal page.",
-        render: () => (
-          <div className="bg-white">
-            <Header preview />
-            <Terms />
-            <Footer />
-          </div>
-        ),
-      },
-      {
-        key: "payment-policy",
-        title: "Payment Policy",
-        description: "Payment and refund policy legal page.",
-        render: () => (
-          <div className="bg-white">
-            <Header preview />
-            <PaymentPolicy />
-            <Footer />
-          </div>
-        ),
-      },
-      {
-        key: "footer",
-        title: "Footer",
-        description: "Footer layout and legal links.",
-        render: () => <Footer />,
-      },
-    ],
-    [],
-  );
+        );
+    }
+  };
 
-  const renderVisualPreview = (state: ContentState, section: VisualPreviewSection) => (
+  const renderSectionLinkedPreview = (state: ContentState, sectionKey: string) => (
     <SiteContentPreviewProvider siteContent={state.siteContent}>
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-        <div className="max-h-[580px] overflow-auto">
-          <div className="pointer-events-none select-none">{section.render()}</div>
+        <div className="max-h-[420px] overflow-auto">
+          <div className="pointer-events-none select-none">{renderPreviewSection(sectionKey)}</div>
         </div>
       </div>
     </SiteContentPreviewProvider>
   );
-
-  const togglePreviewSection = (key: string) => {
-    setExpandedPreviewSections((previous) =>
-      previous.includes(key) ? previous.filter((item) => item !== key) : [...previous, key],
-    );
-  };
-
-  const renderContentSnapshot = (state: ContentState, overlay: HeroOverlaySettings) => {
-    return (
-      <div className="overflow-hidden rounded-xl border border-gray-200">
-        <div className="bg-[#111a34] px-4 py-4 text-white">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="leading-none" style={{ fontFamily: "'Playfair Display', serif" }}>
-              <span className="block text-[11px] uppercase tracking-[0.2em] text-white/70">
-                {state.siteContent.header.brandLines[0] || ""}
-              </span>
-              <span className="block text-xl font-semibold leading-[0.9] text-[#d4af37]">
-                {state.siteContent.header.brandLines[1] || ""}
-              </span>
-              <span className="block text-lg font-semibold text-[#dbe5f5]">
-                {state.siteContent.header.brandLines[2] || ""}
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-white/80">
-              {state.siteContent.header.navigation.filter((item) => item?.visible !== false).map((item) => (
-                <span key={`${item.name}-${item.href}`}>{item.name}</span>
-              ))}
-            </div>
-            <span className="rounded-md bg-[#d4af37] px-3 py-1 text-[11px] font-semibold text-[#111a34]">
-              {state.siteContent.header.ctaText}
-            </span>
-          </div>
-        </div>
-
-        <div className="relative bg-[#efe7df]">
-          {state.homepage.heroImage ? (
-            <>
-              <img
-                src={state.homepage.heroImage}
-                alt={state.homepage.heroAlt || "Hero preview"}
-                className="h-44 w-full object-cover sm:h-56"
-                style={{ opacity: overlay.imageOpacity / 100 }}
-              />
-              {overlay.showText && (overlay.title || overlay.subtitle) ? (
-                <div className="pointer-events-none absolute inset-0 flex items-start justify-center px-4 pt-6 text-center sm:pt-8">
-                  <div className="max-w-xl rounded-2xl bg-[#111a34]/45 px-4 py-3 text-white backdrop-blur-[2px]">
-                    {overlay.title ? (
-                      <h4 className="text-base font-semibold sm:text-xl" style={{ fontFamily: "'Playfair Display', serif" }}>
-                        {overlay.title}
-                      </h4>
-                    ) : null}
-                    {overlay.subtitle ? <p className="mt-1 text-xs text-white/90 sm:text-sm">{overlay.subtitle}</p> : null}
-                  </div>
-                </div>
-              ) : null}
-            </>
-          ) : (
-            <div className="flex h-44 items-center justify-center text-sm text-gray-500 sm:h-56">
-              No hero image set
-            </div>
-          )}
-        </div>
-
-        <div className="grid gap-3 bg-[#111a34] px-4 py-4 text-[11px] text-white/80 sm:grid-cols-3">
-          <div>
-            <p className="mb-1 text-white">{state.siteContent.footer.servicesTitle}</p>
-            <p>{state.siteContent.footer.servicesLinks.find((item) => item?.visible !== false)?.label || ""}</p>
-          </div>
-          <div>
-            <p className="mb-1 text-white">{state.siteContent.footer.resourcesTitle}</p>
-            <p>{state.siteContent.footer.resourcesLinks.find((item) => item?.visible !== false)?.label || ""}</p>
-          </div>
-          <div>
-            <p className="mb-1 text-white">{state.siteContent.footer.connectTitle}</p>
-            <p>{state.siteContent.footer.social.linkedinUrl}</p>
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   if (!token) {
     return (
@@ -2097,83 +1881,11 @@ export function AdminPortal() {
               <p className="mt-2 text-xs text-gray-500">Allowed: jpg, jpeg, png, webp. Max size enforced by backend.</p>
             </div>
 
-            <div className="mb-6 rounded-xl border border-gray-200 p-4">
-              <h3 className="text-sm font-semibold text-[#1a2740]">Live Preview: Current vs Draft</h3>
-              <p className="mt-1 text-xs text-gray-500">
-                Left side shows the currently published site. Right side shows your edit draft in real time.
+            <div className="mb-6 rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <h3 className="text-sm font-semibold text-[#1a2740]">Live Preview Mode</h3>
+              <p className="mt-1 text-xs text-gray-600">
+                Preview is now linked to the selected section in <strong>Advanced: Edit All Content Fields</strong>. Pick a section and you will see Current vs Draft for that exact section only.
               </p>
-              <p className="mt-2 text-xs text-amber-700">
-                Hero note: if your image already contains text, keep hero overlay text hidden to avoid duplicated text.
-              </p>
-
-              <div className="mt-4 grid gap-4 xl:grid-cols-2">
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Current Published</p>
-                  {renderContentSnapshot(contentState, currentHeroOverlay)}
-                </div>
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#111a34]">Editing Draft (Live)</p>
-                  {renderContentSnapshot(contentDraft, draftHeroOverlay)}
-                </div>
-              </div>
-
-              <div className="mt-4 grid gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 sm:grid-cols-2">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Current Hero Image</p>
-                  <p className="mt-1 break-all text-xs text-gray-700">{contentState.homepage.heroImage || "No image selected"}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Draft Hero Image</p>
-                  <p className="mt-1 break-all text-xs text-gray-700">{contentDraft.homepage.heroImage || "No image selected"}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="mb-6 rounded-xl border border-gray-200 p-4">
-              <h3 className="text-sm font-semibold text-[#1a2740]">All Pages Live Preview (Current vs Draft)</h3>
-              <p className="mt-1 text-xs text-gray-500">
-                Each section below renders the actual page/layout components. Left is current published; right is your draft.
-              </p>
-              <p className="mt-2 text-xs text-gray-500">
-                Previews are read-only so you can safely review without triggering forms or navigation.
-              </p>
-
-              <div className="mt-4 grid gap-4">
-                {visualPreviewSections.map((section) => {
-                  const isExpanded = expandedPreviewSections.includes(section.key);
-                  return (
-                    <div key={section.key} className="rounded-xl border border-gray-200">
-                      <div className="border-b border-gray-200 bg-gray-50 px-4 py-2">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-[#1a2740]">{section.title}</p>
-                            <p className="mt-0.5 text-[11px] text-gray-500">{section.description}</p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => togglePreviewSection(section.key)}
-                            className="rounded-md border border-gray-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-[#1a2740] hover:bg-gray-100"
-                          >
-                            {isExpanded ? "Hide" : "Show"}
-                          </button>
-                        </div>
-                      </div>
-                      {isExpanded ? (
-                        <div className="grid gap-4 p-4 lg:grid-cols-2">
-                          <div>
-                            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Current</p>
-                            {renderVisualPreview(contentState, section)}
-                          </div>
-                          <div>
-                            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#111a34]">Draft</p>
-                            {renderVisualPreview(contentDraft, section)}
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
             </div>
 
             {contentMode === "preview" ? (
@@ -2948,6 +2660,30 @@ export function AdminPortal() {
                       ))}
                     </div>
                     <p className="mb-4 text-xs text-gray-500">{activeSectionDefinition.description}</p>
+
+                    <div className="mb-5 rounded-xl border border-gray-200 bg-white p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h4 className="text-sm font-semibold text-[#1a2740]">
+                          Section Preview: {activeSectionDefinition.title}
+                        </h4>
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-600">
+                          Read only
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Left is current published content. Right is your draft for this selected section.
+                      </p>
+                      <div className="mt-3 grid gap-3 xl:grid-cols-2">
+                        <div>
+                          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Current</p>
+                          {renderSectionLinkedPreview(contentState, activeContentSection)}
+                        </div>
+                        <div>
+                          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#111a34]">Draft</p>
+                          {renderSectionLinkedPreview(contentDraft, activeContentSection)}
+                        </div>
+                      </div>
+                    </div>
 
                     <div className="mb-5 flex flex-wrap gap-2">
                       {[

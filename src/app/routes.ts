@@ -11,6 +11,7 @@ import { About } from "./components/pages/About";
 import { Contact } from "./components/pages/Contact";
 import { Privacy } from "./components/pages/Privacy";
 import { Terms } from "./components/pages/Terms";
+import { PaymentPolicy } from "./components/pages/PaymentPolicy";
 import { RequestPortal } from "./components/pages/RequestPortal";
 import { AdminPortal } from "./components/pages/AdminPortal";
 
@@ -32,6 +33,7 @@ export const router = createBrowserRouter([
       { path: "contact", Component: Contact },
       { path: "privacy", Component: Privacy },
       { path: "terms", Component: Terms },
+      { path: "payment-policy", Component: PaymentPolicy },
     ],
   },
 ]);

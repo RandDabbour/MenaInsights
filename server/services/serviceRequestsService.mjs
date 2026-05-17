@@ -15,6 +15,10 @@ import {
   upsertPayment,
 } from "../repositories/paymentsRepository.mjs";
 import {
+  createPaymentEvent,
+  listPaymentEventsByRequestId,
+} from "../repositories/paymentEventsRepository.mjs";
+import {
   createRequestAttachment,
   listAttachmentsByRequestId,
 } from "../repositories/requestAttachmentsRepository.mjs";
@@ -70,6 +74,19 @@ function createFallbackPayment() {
   };
 }
 
+function toPaymentHistoryPayload(events) {
+  return (Array.isArray(events) ? events : []).map((event) => ({
+    id: event.id,
+    status: event.status,
+    eventType: event.eventType,
+    eventNote: event.eventNote,
+    providerEventId: event.providerEventId,
+    amount: event.amount,
+    currency: event.currency,
+    createdAt: event.createdAt,
+  }));
+}
+
 function toMessagePayload(messageRecord) {
   return {
     id: messageRecord.id,
@@ -108,6 +125,7 @@ function sanitizePublicRequest(requestRecord) {
     },
     proposal: requestRecord.proposal,
     payment: requestRecord.payment,
+    paymentHistory: requestRecord.paymentHistory || [],
     messages: requestRecord.messages,
   };
 }
@@ -117,10 +135,11 @@ async function loadRequestDetails(requestRecord) {
     return null;
   }
 
-  const [messages, payment, attachments] = await Promise.all([
+  const [messages, payment, attachments, paymentHistory] = await Promise.all([
     listMessagesByRequestId(requestRecord.id),
     findPaymentByRequestId(requestRecord.id),
     listAttachmentsByRequestId(requestRecord.id),
+    listPaymentEventsByRequestId(requestRecord.id),
   ]);
 
   return {
@@ -129,9 +148,31 @@ async function loadRequestDetails(requestRecord) {
       ...createFallbackPayment(),
       requestId: requestRecord.id,
     },
+    paymentHistory: toPaymentHistoryPayload(paymentHistory),
     messages: messages.map(toMessagePayload),
     attachments,
   };
+}
+
+async function insertPaymentHistoryEvent(connection, requestRecord, input) {
+  if (!requestRecord?.payment?.id) {
+    return;
+  }
+
+  const createdAt = input.createdAt || nowIso();
+  await createPaymentEvent(connection, {
+    paymentId: requestRecord.payment.id,
+    requestId: requestRecord.id,
+    status: input.status || requestRecord.payment.status || PAYMENT_STATUS.PENDING,
+    eventType: input.eventType,
+    eventNote: input.eventNote || "",
+    providerEventId: input.providerEventId || null,
+    providerPayload: input.providerPayload || null,
+    amount: input.amount ?? requestRecord.payment.amount ?? null,
+    currency: input.currency || requestRecord.payment.currency || null,
+    createdAt,
+    updatedAt: createdAt,
+  });
 }
 
 function applyPaymentProposalDefaults(requestRecord, updatedAt) {
@@ -167,6 +208,7 @@ export async function listRequestsSummary() {
 
 export async function createRequest({ form }) {
   const createdAt = nowIso();
+  const paymentId = randomUUID();
   const requestRecord = {
     id: randomUUID(),
     accessToken: randomToken(20),
@@ -188,7 +230,7 @@ export async function createRequest({ form }) {
   await withTransaction(async (connection) => {
     await insertServiceRequest(connection, requestRecord);
     await upsertPayment(connection, {
-      id: randomUUID(),
+      id: paymentId,
       requestId: requestRecord.id,
       method: "paypal",
       status: PAYMENT_STATUS.PENDING,
@@ -197,6 +239,17 @@ export async function createRequest({ form }) {
       paypalOrderId: null,
       paypalCaptureId: null,
       rawProviderResponse: null,
+      createdAt,
+      updatedAt: createdAt,
+    });
+    await createPaymentEvent(connection, {
+      paymentId,
+      requestId: requestRecord.id,
+      status: PAYMENT_STATUS.PENDING,
+      eventType: "payment_initialized",
+      eventNote: "Request received. Waiting for proposal.",
+      amount: null,
+      currency: "USD",
       createdAt,
       updatedAt: createdAt,
     });
@@ -233,6 +286,22 @@ export async function applyPublicAction({ accessToken, action, message }) {
       requestId: requestRecord.id,
       updatedAt,
     });
+    await insertPaymentHistoryEvent(connection, requestRecord, {
+      status: requestRecord.payment.status,
+      eventType:
+        action === "accept"
+          ? "proposal_accepted_by_client"
+          : action === "reject"
+            ? "proposal_rejected_by_client"
+            : "negotiation_requested_by_client",
+      eventNote:
+        action === "accept"
+          ? "Client accepted proposal and can proceed to payment."
+          : action === "reject"
+            ? "Client rejected proposal."
+            : "Client requested negotiation.",
+      createdAt: updatedAt,
+    });
 
     if (action === "negotiate") {
       await insertMessage(connection, {
@@ -263,6 +332,14 @@ export async function applyProposal({ requestId, proposal }) {
       ...requestRecord.payment,
       requestId: requestRecord.id,
       updatedAt,
+    });
+    await insertPaymentHistoryEvent(connection, requestRecord, {
+      status: PAYMENT_STATUS.PENDING,
+      eventType: "proposal_priced",
+      eventNote: "Owner sent a proposal. Payment is pending client approval.",
+      amount: requestRecord.payment.amount,
+      currency: requestRecord.payment.currency,
+      createdAt: updatedAt,
     });
 
     if (requestRecord.proposal?.notes) {
@@ -318,6 +395,17 @@ export async function applyStatusUpdate({ requestId, nextStatus }) {
       requestId: requestRecord.id,
       updatedAt: requestRecord.updatedAt,
     });
+    await insertPaymentHistoryEvent(connection, requestRecord, {
+      status: requestRecord.payment.status,
+      eventType: nextStatus === REQUEST_STATUS.PAID ? "admin_marked_paid" : "admin_status_update",
+      eventNote:
+        nextStatus === REQUEST_STATUS.PAID
+          ? "Admin marked request as paid."
+          : `Admin updated request status to ${nextStatus}.`,
+      amount: requestRecord.payment.amount,
+      currency: requestRecord.payment.currency,
+      createdAt: requestRecord.updatedAt,
+    });
   });
 
   return getRequestById(requestId);
@@ -340,6 +428,16 @@ export async function markPaymentPendingWithOrder({
       requestId: requestRecord.id,
       updatedAt: requestRecord.payment.updatedAt,
     });
+    await insertPaymentHistoryEvent(connection, requestRecord, {
+      status: PAYMENT_STATUS.PENDING,
+      eventType: "paypal_order_created",
+      eventNote: "PayPal checkout started.",
+      providerEventId: requestRecord.payment.paypalOrderId || null,
+      providerPayload: rawProviderResponse || null,
+      amount: requestRecord.payment.amount,
+      currency: requestRecord.payment.currency,
+      createdAt: requestRecord.payment.updatedAt,
+    });
   });
 
   return getRequestById(requestId);
@@ -361,6 +459,16 @@ export async function markPaymentApproved({
       ...requestRecord.payment,
       requestId: requestRecord.id,
       updatedAt: requestRecord.payment.updatedAt,
+    });
+    await insertPaymentHistoryEvent(connection, requestRecord, {
+      status: PAYMENT_STATUS.APPROVED,
+      eventType: "paypal_order_approved",
+      eventNote: "PayPal order approved and awaiting capture.",
+      providerEventId: requestRecord.payment.paypalOrderId || null,
+      providerPayload: rawProviderResponse || null,
+      amount: requestRecord.payment.amount,
+      currency: requestRecord.payment.currency,
+      createdAt: requestRecord.payment.updatedAt,
     });
   });
 
@@ -398,6 +506,18 @@ export async function markPaymentCaptured({
       requestId: requestRecord.id,
       updatedAt: requestRecord.updatedAt,
     });
+    if (!wasAlreadyPaid) {
+      await insertPaymentHistoryEvent(connection, requestRecord, {
+        status: PAYMENT_STATUS.CAPTURED,
+        eventType: "paypal_capture_completed",
+        eventNote: "PayPal payment captured successfully.",
+        providerEventId: requestRecord.payment.paypalCaptureId || requestRecord.payment.paypalOrderId || null,
+        providerPayload: rawProviderResponse || null,
+        amount: requestRecord.payment.amount,
+        currency: requestRecord.payment.currency,
+        createdAt: requestRecord.updatedAt,
+      });
+    }
   });
 
   const refreshed = await getRequestById(requestId);
@@ -422,6 +542,16 @@ export async function markPaymentFailed({
       requestId: requestRecord.id,
       updatedAt: requestRecord.payment.updatedAt,
     });
+    await insertPaymentHistoryEvent(connection, requestRecord, {
+      status: PAYMENT_STATUS.FAILED,
+      eventType: "paypal_capture_failed",
+      eventNote: "PayPal payment failed or was denied.",
+      providerEventId: requestRecord.payment.paypalOrderId || null,
+      providerPayload: rawProviderResponse || null,
+      amount: requestRecord.payment.amount,
+      currency: requestRecord.payment.currency,
+      createdAt: requestRecord.payment.updatedAt,
+    });
   });
 
   return getRequestById(requestId);
@@ -443,6 +573,16 @@ export async function markPaymentRefundedByCaptureId(paypalCaptureId, rawProvide
       ...requestRecord.payment,
       requestId: requestRecord.id,
       updatedAt: requestRecord.payment.updatedAt,
+    });
+    await insertPaymentHistoryEvent(connection, requestRecord, {
+      status: PAYMENT_STATUS.REFUNDED,
+      eventType: "paypal_refund_completed",
+      eventNote: "PayPal refund confirmed.",
+      providerEventId: paypalCaptureId || requestRecord.payment.paypalCaptureId || null,
+      providerPayload: rawProviderResponse || null,
+      amount: requestRecord.payment.amount,
+      currency: requestRecord.payment.currency,
+      createdAt: requestRecord.payment.updatedAt,
     });
   });
 

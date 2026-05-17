@@ -75,6 +75,9 @@ export function Footer() {
           <div className="flex gap-6 text-sm text-gray-500">
             <Link to="/privacy" className="hover:text-gray-300 transition-colors">{footerContent.privacyLabel}</Link>
             <Link to="/terms" className="hover:text-gray-300 transition-colors">{footerContent.termsLabel}</Link>
+            <Link to="/payment-policy" className="hover:text-gray-300 transition-colors">
+              {footerContent.paymentPolicyLabel || "Payment & Refund Policy"}
+            </Link>
           </div>
         </div>
       </div>

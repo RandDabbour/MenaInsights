@@ -33,6 +33,16 @@ type PublicRequest = {
     paypalOrderId?: string | null;
     paypalCaptureId?: string | null;
   };
+  paymentHistory?: Array<{
+    id: string;
+    status: string;
+    eventType: string;
+    eventNote: string;
+    providerEventId?: string | null;
+    amount?: number | null;
+    currency?: string | null;
+    createdAt: string;
+  }>;
   messages: Array<{
     id: string;
     authorRole: "owner" | "user";
@@ -87,6 +97,14 @@ function formatDate(value: string | undefined) {
   return parsed.toLocaleString();
 }
 
+function formatAmount(amount: number | null | undefined, currency: string | null | undefined) {
+  if (!Number.isFinite(amount)) {
+    return "—";
+  }
+  const safeCurrency = String(currency || "USD").toUpperCase();
+  return `${safeCurrency} ${Number(amount).toLocaleString()}`;
+}
+
 export function RequestPortal() {
   const { token } = useParams();
   const location = useLocation();
@@ -96,6 +114,11 @@ export function RequestPortal() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [negotiationMessage, setNegotiationMessage] = useState("");
+  const [paymentBanner, setPaymentBanner] = useState<null | {
+    tone: "success" | "warning" | "error";
+    title: string;
+    message: string;
+  }>(null);
 
   const loadRequest = async () => {
     if (!token) {
@@ -133,7 +156,27 @@ export function RequestPortal() {
     const params = new URLSearchParams(location.search);
     const paypalStatus = params.get("paypal");
     const paypalOrderId = params.get("token");
+    if (!paypalStatus) {
+      return;
+    }
+
+    if (paypalStatus === "cancel") {
+      setPaymentBanner({
+        tone: "warning",
+        title: "Payment cancelled",
+        message: "You canceled PayPal checkout. Your request is still waiting for payment.",
+      });
+      navigate(`/request/${token}`, { replace: true });
+      return;
+    }
+
     if (paypalStatus !== "success" || !paypalOrderId) {
+      setPaymentBanner({
+        tone: "error",
+        title: "Payment not completed",
+        message: "PayPal did not return a valid payment token. Please try again.",
+      });
+      navigate(`/request/${token}`, { replace: true });
       return;
     }
 
@@ -154,9 +197,20 @@ export function RequestPortal() {
           throw new Error(payload.error || "Unable to capture PayPal payment");
         }
         setRequestData(payload.request);
+        setPaymentBanner({
+          tone: "success",
+          title: "Payment completed",
+          message: "Your PayPal payment was captured successfully.",
+        });
         navigate(`/request/${token}`, { replace: true });
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Unable to capture PayPal payment");
+        const message = err instanceof Error ? err.message : "Unable to capture PayPal payment";
+        setError(message);
+        setPaymentBanner({
+          tone: "error",
+          title: "Payment failed",
+          message,
+        });
       } finally {
         setBusy(false);
       }
@@ -222,6 +276,11 @@ export function RequestPortal() {
         throw new Error("PayPal approval URL is missing.");
       }
       setRequestData(payload.request);
+      setPaymentBanner({
+        tone: "warning",
+        title: "Redirecting to PayPal",
+        message: "Complete your payment in the PayPal window, then you will return here automatically.",
+      });
       window.location.assign(payload.approveUrl);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to start PayPal payment");
@@ -297,6 +356,21 @@ export function RequestPortal() {
       </section>
 
       <section className="mx-auto max-w-7xl px-6 py-10 lg:px-8">
+        {paymentBanner ? (
+          <div
+            className={`mb-6 rounded-xl border px-4 py-3 text-sm ${
+              paymentBanner.tone === "success"
+                ? "border-green-200 bg-green-50 text-green-800"
+                : paymentBanner.tone === "warning"
+                  ? "border-amber-200 bg-amber-50 text-amber-800"
+                  : "border-red-200 bg-red-50 text-red-700"
+            }`}
+          >
+            <p className="font-semibold">{paymentBanner.title}</p>
+            <p className="mt-1">{paymentBanner.message}</p>
+          </div>
+        ) : null}
+
         {error ? (
           <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
@@ -489,6 +563,43 @@ export function RequestPortal() {
                   <span className="font-medium capitalize">{paymentState}</span>
                 </div>
               </div>
+              <div className="mt-3 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-600">
+                {paymentState === "waiting for price"
+                  ? "Owner has not sent a price proposal yet."
+                  : paymentState === "price proposed"
+                    ? "A proposal is ready. Accept it to continue to payment."
+                    : paymentState === "payment pending"
+                      ? "Payment is not captured yet. You can complete checkout with PayPal."
+                      : paymentState === "failed payment"
+                        ? "Previous payment attempt failed. You can retry safely."
+                        : "Payment confirmed. No further action required."}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+              <h2 className="mb-4 text-lg font-semibold text-[#1a2740]">Payment History</h2>
+              {!requestData.paymentHistory || requestData.paymentHistory.length === 0 ? (
+                <p className="text-sm text-gray-500">No payment events yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {requestData.paymentHistory.map((event) => (
+                    <div key={event.id} className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-[#1a2740]">
+                          {event.eventType.replace(/_/g, " ")}
+                        </p>
+                        <p className="text-[11px] text-gray-500">{formatDate(event.createdAt)}</p>
+                      </div>
+                      <p className="mt-1 text-xs text-gray-700">{event.eventNote || "Status updated."}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-gray-500">
+                        <span>Status: {event.status}</span>
+                        <span>Amount: {formatAmount(event.amount, event.currency)}</span>
+                        {event.providerEventId ? <span>Ref: {event.providerEventId}</span> : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">

@@ -1,6 +1,25 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { CheckCircle2, Image as ImageIcon, Link2, Mail, Type as TypeIcon } from "lucide-react";
-import { DEFAULT_SITE_CONTENT, mergeSiteContent, type SiteContent } from "../../content/siteContent";
+import {
+  DEFAULT_SITE_CONTENT,
+  SiteContentPreviewProvider,
+  mergeSiteContent,
+  type SiteContent,
+} from "../../content/siteContent";
+import { Header } from "../layout/Header";
+import { Footer } from "../layout/Footer";
+import { Homepage } from "./Homepage";
+import { About } from "./About";
+import { Insights } from "./Insights";
+import { MediaLandscapes } from "./MediaLandscapes";
+import { Profiles } from "./Profiles";
+import { Services } from "./Services";
+import { StrategicBriefs } from "./StrategicBriefs";
+import { RequestAnalysis } from "./RequestAnalysis";
+import { Contact } from "./Contact";
+import { Privacy } from "./Privacy";
+import { Terms } from "./Terms";
+import { PaymentPolicy } from "./PaymentPolicy";
 
 type RequestSummary = {
   id: string;
@@ -41,6 +60,16 @@ type RequestDetails = {
     paypalOrderId?: string | null;
     paypalCaptureId?: string | null;
   };
+  paymentHistory?: Array<{
+    id: string;
+    status: string;
+    eventType: string;
+    eventNote: string;
+    providerEventId?: string | null;
+    amount?: number | null;
+    currency?: string | null;
+    createdAt: string;
+  }>;
   messages: Array<{
     id: string;
     authorRole: "owner" | "user";
@@ -110,9 +139,11 @@ type HeroOverlaySettings = {
   imageOpacity: number;
 };
 
-type PreviewRow = {
-  label: string;
-  value: string;
+type VisualPreviewSection = {
+  key: string;
+  title: string;
+  description: string;
+  render: () => ReactNode;
 };
 
 type FlatField = {
@@ -220,6 +251,12 @@ const CONTENT_SECTIONS: ContentSectionDefinition[] = [
     title: "Terms",
     description: "Terms page sections and legal copy.",
     prefixes: ["siteContent.pages.terms."],
+  },
+  {
+    key: "payment-policy",
+    title: "Payment Policy",
+    description: "Payment and refund policy page content.",
+    prefixes: ["siteContent.pages.paymentPolicy."],
   },
   {
     key: "other",
@@ -579,25 +616,6 @@ function normalizeHeroOverlaySettings(value: unknown): HeroOverlaySettings {
   };
 }
 
-function previewText(value: unknown, fallback = "—") {
-  const text = String(value ?? "").trim();
-  return text || fallback;
-}
-
-function summarizeValues(values: unknown[], limit = 3) {
-  const entries = values
-    .map((value) => String(value ?? "").trim())
-    .filter(Boolean);
-  if (entries.length === 0) {
-    return "—";
-  }
-  const visible = entries.slice(0, limit).join(", ");
-  if (entries.length <= limit) {
-    return visible;
-  }
-  return `${visible} +${entries.length - limit} more`;
-}
-
 function flattenStringFields(value: unknown, prefix = ""): FlatField[] {
   const fields: FlatField[] = [];
 
@@ -696,6 +714,7 @@ export function AdminPortal() {
   const [contentSaved, setContentSaved] = useState("");
   const [activeContentSection, setActiveContentSection] = useState("header");
   const [activeFieldKind, setActiveFieldKind] = useState<"all" | FieldKind>("all");
+  const [expandedPreviewSections, setExpandedPreviewSections] = useState<string[]>(["homepage"]);
 
   const [settingsEmail, setSettingsEmail] = useState("");
   const [settingsCurrentPassword, setSettingsCurrentPassword] = useState("");
@@ -1440,156 +1459,183 @@ export function AdminPortal() {
     }
   };
 
-  const buildPreviewSections = (state: ContentState): Array<{ title: string; rows: PreviewRow[] }> => {
-    const site = state.siteContent;
-    const homepage = site.pages.homepage;
-    const about = site.pages.about;
-    const insights = site.pages.insights;
-    const media = site.pages.mediaLandscapes;
-    const profiles = site.pages.profiles;
-    const services = site.pages.services;
-    const briefs = site.pages.strategicBriefs;
-    const contact = site.pages.contact;
-    const request = site.pages.requestAnalysis;
-    const privacy = site.pages.privacy;
-    const terms = site.pages.terms;
-    const heroOverlay = normalizeHeroOverlaySettings(getByPath(state, "siteContent.pages.homepage.heroOverlay"));
-
-    return [
+  const visualPreviewSections = useMemo<VisualPreviewSection[]>(
+    () => [
       {
+        key: "header",
         title: "Header",
-        rows: [
-          { label: "Brand", value: summarizeValues(site.header.brandLines) },
-          { label: "Navigation", value: summarizeValues(site.header.navigation.filter((item) => item?.visible !== false).map((item) => item.name), 5) },
-          { label: "CTA", value: previewText(site.header.ctaText) },
-        ],
+        description: "Top navigation and brand.",
+        render: () => <Header preview />,
       },
       {
-        title: "Hero",
-        rows: [
-          { label: "Image", value: previewText(state.homepage.heroImage, "No image selected") },
-          { label: "Overlay", value: heroOverlay.showText ? "Visible" : "Hidden" },
-          { label: "Image Opacity", value: `${heroOverlay.imageOpacity}%` },
-          { label: "Overlay Title", value: previewText(heroOverlay.title) },
-        ],
-      },
-      {
+        key: "homepage",
         title: "Homepage",
-        rows: [
-          { label: "Services Intro", value: previewText(homepage.servicesIntro.title) },
-          { label: "Services Cards", value: `${homepage.services.length}` },
-          { label: "Reports Intro", value: previewText(homepage.reportsIntro.title) },
-          { label: "Reports", value: `${homepage.reports.length}` },
-          { label: "CTA", value: previewText(homepage.cta.title) },
-        ],
-      },
-      {
-        title: "About",
-        rows: [
-          { label: "Title", value: previewText(about.title) },
-          { label: "Intro Title", value: previewText(about.introTitle) },
-          { label: "Intro Paragraphs", value: `${about.introParagraphs.length}` },
-        ],
-      },
-      {
-        title: "Insights",
-        rows: [
-          { label: "Title", value: previewText(insights.title) },
-          { label: "Categories", value: summarizeValues(insights.categories, 5) },
-          { label: "Articles", value: `${insights.items.length}` },
-          { label: "First Article", value: previewText(insights.items[0]?.title) },
-        ],
-      },
-      {
-        title: "Media Landscapes",
-        rows: [
-          { label: "Title", value: previewText(media.title) },
-          { label: "Regions", value: `${media.regions.length}` },
-          { label: "Report Includes", value: `${media.reportContents.items.length} items` },
-          { label: "Request Card", value: previewText(media.requestCard.title) },
-        ],
-      },
-      {
-        title: "Profiles",
-        rows: [
-          { label: "Title", value: previewText(profiles.title) },
-          { label: "Profile Types", value: `${profiles.profileTypes.length}` },
-          { label: "Sample Profiles", value: `${profiles.sampleWork.items.length}` },
-          { label: "CTA", value: previewText(profiles.cta.title) },
-        ],
-      },
-      {
-        title: "Services",
-        rows: [
-          { label: "Title", value: previewText(services.title) },
-          { label: "Service Cards", value: `${services.cards.length}` },
-          { label: "Process Steps", value: `${services.process.steps.length}` },
-          { label: "Show Pricing", value: services.showPricing ? "Yes" : "No" },
-        ],
-      },
-      {
-        title: "Strategic Briefs",
-        rows: [
-          { label: "Title", value: previewText(briefs.title) },
-          { label: "Brief Types", value: `${briefs.briefTypes.length}` },
-          { label: "Sample Briefs", value: `${briefs.sampleWork.items.length}` },
-          { label: "Show Pricing", value: briefs.showPricing ? "Yes" : "No" },
-        ],
-      },
-      {
-        title: "Request Analysis",
-        rows: [
-          { label: "Title", value: previewText(request.header.title) },
-          { label: "Service Options", value: `${request.serviceOptions.length}` },
-          { label: "Timeline Options", value: `${request.urgencyOptions.length}` },
-          { label: "Budget Field", value: request.showBudgetField ? "Visible" : "Hidden" },
-        ],
-      },
-      {
-        title: "Contact",
-        rows: [
-          { label: "Title", value: previewText(contact.header.title) },
-          { label: "Channels", value: `${contact.channels?.filter((channel) => channel?.visible !== false).length || 0}` },
-          { label: "Form Title", value: previewText(contact.formTitle) },
-          { label: "Sidebar CTA", value: previewText(contact.sidebarCard.cta) },
-        ],
-      },
-      {
-        title: "Footer",
-        rows: [
-          { label: "Brand", value: previewText(site.footer.brandName) },
-          { label: "Services Links", value: `${site.footer.servicesLinks.filter((item) => item?.visible !== false).length}` },
-          { label: "Resources Links", value: `${site.footer.resourcesLinks.filter((item) => item?.visible !== false).length}` },
-          { label: "Connect Links", value: `${site.footer.connectLinks.filter((item) => item?.visible !== false).length}` },
-        ],
-      },
-      {
-        title: "Legal",
-        rows: [
-          { label: "Privacy Title", value: previewText(privacy.title) },
-          { label: "Privacy Sections", value: `${privacy.sections.length}` },
-          { label: "Terms Title", value: previewText(terms.title) },
-          { label: "Terms Sections", value: `${terms.sections.length}` },
-        ],
-      },
-    ];
-  };
-
-  const renderRows = (rows: PreviewRow[]) => {
-    return (
-      <div className="space-y-2">
-        {rows.map((row) => (
-          <div key={row.label} className="rounded-md border border-gray-100 bg-gray-50 px-3 py-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{row.label}</p>
-            <p className="mt-1 text-xs text-[#1a2740]">{row.value}</p>
+        description: "Hero + all homepage sections + footer.",
+        render: () => (
+          <div className="bg-white">
+            <Header preview />
+            <Homepage />
+            <Footer />
           </div>
-        ))}
+        ),
+      },
+      {
+        key: "about",
+        title: "About",
+        description: "About page full layout.",
+        render: () => (
+          <div className="bg-white">
+            <Header preview />
+            <About />
+            <Footer />
+          </div>
+        ),
+      },
+      {
+        key: "insights",
+        title: "Insights",
+        description: "Insights page with categories and cards.",
+        render: () => (
+          <div className="bg-white">
+            <Header preview />
+            <Insights />
+            <Footer />
+          </div>
+        ),
+      },
+      {
+        key: "media-landscapes",
+        title: "Media Landscapes",
+        description: "Regions, report includes, and request card.",
+        render: () => (
+          <div className="bg-white">
+            <Header preview />
+            <MediaLandscapes />
+            <Footer />
+          </div>
+        ),
+      },
+      {
+        key: "profiles",
+        title: "Profiles",
+        description: "Profile types and CTA sections.",
+        render: () => (
+          <div className="bg-white">
+            <Header preview />
+            <Profiles />
+            <Footer />
+          </div>
+        ),
+      },
+      {
+        key: "services",
+        title: "Services",
+        description: "Services cards, process, and CTA.",
+        render: () => (
+          <div className="bg-white">
+            <Header preview />
+            <Services />
+            <Footer />
+          </div>
+        ),
+      },
+      {
+        key: "strategic-briefs",
+        title: "Strategic Briefs",
+        description: "Brief types, inclusions, and sample briefs.",
+        render: () => (
+          <div className="bg-white">
+            <Header preview />
+            <StrategicBriefs />
+            <Footer />
+          </div>
+        ),
+      },
+      {
+        key: "request-analysis",
+        title: "Request Analysis",
+        description: "Public request form and field labels.",
+        render: () => (
+          <div className="bg-white">
+            <Header preview />
+            <RequestAnalysis />
+            <Footer />
+          </div>
+        ),
+      },
+      {
+        key: "contact",
+        title: "Contact",
+        description: "Contact channels and form layout.",
+        render: () => (
+          <div className="bg-white">
+            <Header preview />
+            <Contact />
+            <Footer />
+          </div>
+        ),
+      },
+      {
+        key: "privacy",
+        title: "Privacy",
+        description: "Privacy legal page.",
+        render: () => (
+          <div className="bg-white">
+            <Header preview />
+            <Privacy />
+            <Footer />
+          </div>
+        ),
+      },
+      {
+        key: "terms",
+        title: "Terms",
+        description: "Terms legal page.",
+        render: () => (
+          <div className="bg-white">
+            <Header preview />
+            <Terms />
+            <Footer />
+          </div>
+        ),
+      },
+      {
+        key: "payment-policy",
+        title: "Payment Policy",
+        description: "Payment and refund policy legal page.",
+        render: () => (
+          <div className="bg-white">
+            <Header preview />
+            <PaymentPolicy />
+            <Footer />
+          </div>
+        ),
+      },
+      {
+        key: "footer",
+        title: "Footer",
+        description: "Footer layout and legal links.",
+        render: () => <Footer />,
+      },
+    ],
+    [],
+  );
+
+  const renderVisualPreview = (state: ContentState, section: VisualPreviewSection) => (
+    <SiteContentPreviewProvider siteContent={state.siteContent}>
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="max-h-[580px] overflow-auto">
+          <div className="pointer-events-none select-none">{section.render()}</div>
+        </div>
       </div>
+    </SiteContentPreviewProvider>
+  );
+
+  const togglePreviewSection = (key: string) => {
+    setExpandedPreviewSections((previous) =>
+      previous.includes(key) ? previous.filter((item) => item !== key) : [...previous, key],
     );
   };
-
-  const currentPreviewSections = buildPreviewSections(contentState);
-  const draftPreviewSections = buildPreviewSections(contentDraft);
 
   const renderContentSnapshot = (state: ContentState, overlay: HeroOverlaySettings) => {
     return (
@@ -1792,6 +1838,12 @@ export function AdminPortal() {
                       {selectedRequest.name} ({selectedRequest.email})
                     </p>
                     <p className="text-sm text-gray-600">Status: {selectedRequest.status}</p>
+                    <p className="text-sm text-gray-600">
+                      Payment: {selectedRequest.payment?.status || "pending"}
+                      {selectedRequest.payment?.amount != null
+                        ? ` • ${selectedRequest.payment.currency || "USD"} ${selectedRequest.payment.amount.toLocaleString()}`
+                        : ""}
+                    </p>
                     <p className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{selectedRequest.description}</p>
                     <a
                       href={selectedRequest.accessLink}
@@ -1915,6 +1967,39 @@ export function AdminPortal() {
                         {statusSaving ? "Updating..." : "Update Status"}
                       </button>
                     </div>
+                  </div>
+
+                  <div className="rounded-lg border border-gray-200 p-4">
+                    <h3 className="mb-2 text-sm font-semibold text-[#1a2740]">Payment History</h3>
+                    {!selectedRequest.paymentHistory || selectedRequest.paymentHistory.length === 0 ? (
+                      <p className="text-xs text-gray-500">No payment events recorded yet.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {selectedRequest.paymentHistory.map((event) => (
+                          <div key={event.id} className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a2740]">
+                                {event.eventType.replace(/_/g, " ")}
+                              </p>
+                              <p className="text-[11px] text-gray-500">
+                                {event.createdAt ? new Date(event.createdAt).toLocaleString() : "—"}
+                              </p>
+                            </div>
+                            <p className="mt-1 text-xs text-gray-700">{event.eventNote || "Status updated."}</p>
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
+                              <span>Status: {event.status}</span>
+                              {event.amount != null ? (
+                                <span>
+                                  Amount: {event.currency || selectedRequest.payment?.currency || "USD"}{" "}
+                                  {event.amount.toLocaleString()}
+                                </span>
+                              ) : null}
+                              {event.providerEventId ? <span>Ref: {event.providerEventId}</span> : null}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -2047,27 +2132,44 @@ export function AdminPortal() {
             <div className="mb-6 rounded-xl border border-gray-200 p-4">
               <h3 className="text-sm font-semibold text-[#1a2740]">All Pages Live Preview (Current vs Draft)</h3>
               <p className="mt-1 text-xs text-gray-500">
-                Each section shows published content on the left and your draft on the right so you can see exactly where edits will reflect.
+                Each section below renders the actual page/layout components. Left is current published; right is your draft.
+              </p>
+              <p className="mt-2 text-xs text-gray-500">
+                Previews are read-only so you can safely review without triggering forms or navigation.
               </p>
 
               <div className="mt-4 grid gap-4">
-                {currentPreviewSections.map((section, index) => {
-                  const draftSection = draftPreviewSections[index] || section;
+                {visualPreviewSections.map((section) => {
+                  const isExpanded = expandedPreviewSections.includes(section.key);
                   return (
-                    <div key={section.title} className="rounded-xl border border-gray-200">
+                    <div key={section.key} className="rounded-xl border border-gray-200">
                       <div className="border-b border-gray-200 bg-gray-50 px-4 py-2">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-[#1a2740]">{section.title}</p>
-                      </div>
-                      <div className="grid gap-4 p-4 lg:grid-cols-2">
-                        <div>
-                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Current</p>
-                          {renderRows(section.rows)}
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-[#1a2740]">{section.title}</p>
+                            <p className="mt-0.5 text-[11px] text-gray-500">{section.description}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => togglePreviewSection(section.key)}
+                            className="rounded-md border border-gray-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-[#1a2740] hover:bg-gray-100"
+                          >
+                            {isExpanded ? "Hide" : "Show"}
+                          </button>
                         </div>
-                        <div>
-                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#111a34]">Draft</p>
-                          {renderRows(draftSection.rows)}
-                        </div>
                       </div>
+                      {isExpanded ? (
+                        <div className="grid gap-4 p-4 lg:grid-cols-2">
+                          <div>
+                            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Current</p>
+                            {renderVisualPreview(contentState, section)}
+                          </div>
+                          <div>
+                            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#111a34]">Draft</p>
+                            {renderVisualPreview(contentDraft, section)}
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   );
                 })}

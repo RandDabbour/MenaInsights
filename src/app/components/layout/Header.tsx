@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Menu, Search, X } from "lucide-react";
 import { useSiteContent } from "../../content/siteContent";
 
-export function Header() {
+export function Header({ preview = false }: { preview?: boolean }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [brandVisible, setBrandVisible] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -62,7 +62,9 @@ export function Header() {
   ];
 
   return (
-    <header className="sticky top-0 z-50 border-b border-white/10 bg-[#111a34] text-white shadow-[0_18px_60px_rgba(8,13,27,0.35)]">
+    <header
+      className={`${preview ? "relative z-10" : "sticky top-0 z-50"} border-b border-white/10 bg-[#111a34] text-white shadow-[0_18px_60px_rgba(8,13,27,0.35)]`}
+    >
       <nav className="relative mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-10">
         <div className="relative flex h-[88px] items-center justify-between gap-6">
           <Link to="/" className="relative flex h-full items-center pl-4 pr-4 lg:pl-10">

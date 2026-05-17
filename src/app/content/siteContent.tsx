@@ -54,6 +54,7 @@ export const DEFAULT_SITE_CONTENT = {
     copyright: "© 2026 Middle East Media Insights. All rights reserved.",
     privacyLabel: "Privacy",
     termsLabel: "Terms",
+    paymentPolicyLabel: "Payment & Refund Policy",
   },
   pages: {
     homepage: {
@@ -694,6 +695,34 @@ export const DEFAULT_SITE_CONTENT = {
       submitLabel: "Submit Request",
       submittingLabel: "Submitting...",
     },
+    paymentPolicy: {
+      eyebrow: "Legal",
+      title: "Payment & Refund Policy",
+      description:
+        "How pricing, payment capture, refunds, and dispute handling work for Middle East Media Insights services.",
+      sections: [
+        {
+          title: "Proposal and Pricing",
+          body:
+            "All work is quoted per request after scope review. No charge is made until a proposal is accepted and payment is completed through the approved payment method.",
+        },
+        {
+          title: "Payment Confirmation",
+          body:
+            "A request is considered paid only after a successful payment capture is confirmed by the payment provider and reflected in the request portal status.",
+        },
+        {
+          title: "Refund Eligibility",
+          body:
+            "Refunds are reviewed case-by-case. If delivery has not started, full or partial refunds may be approved. Once substantial work is delivered, refunds may be limited.",
+        },
+        {
+          title: "Disputes and Resolution",
+          body:
+            "If you disagree with scope, timeline, or deliverable quality, submit a message through your request portal. We will respond with a resolution plan before formal disputes are escalated.",
+        },
+      ],
+    },
     privacy: {
       eyebrow: "Legal",
       title: "Privacy Policy",
@@ -843,6 +872,24 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(() => ({ siteContent, refreshSiteContent }), [siteContent]);
+
+  return <SiteContentContext.Provider value={value}>{children}</SiteContentContext.Provider>;
+}
+
+export function SiteContentPreviewProvider({
+  children,
+  siteContent,
+}: {
+  children: ReactNode;
+  siteContent: SiteContent;
+}) {
+  const value = useMemo(
+    () => ({
+      siteContent,
+      refreshSiteContent: async () => {},
+    }),
+    [siteContent],
+  );
 
   return <SiteContentContext.Provider value={value}>{children}</SiteContentContext.Provider>;
 }

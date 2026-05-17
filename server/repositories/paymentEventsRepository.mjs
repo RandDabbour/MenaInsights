@@ -79,3 +79,36 @@ export async function createPaymentEvent(connection, eventRecord) {
     ],
   );
 }
+
+export async function listPaymentEventsForAdmin(limit = 200) {
+  const safeLimit = Number.isFinite(Number(limit)) ? Math.max(1, Math.min(1000, Number(limit))) : 200;
+  const rows = await repoQuery(
+    null,
+    `SELECT
+        pe.*,
+        sr.topic AS request_topic,
+        sr.requester_name,
+        sr.requester_email,
+        sr.status AS request_status,
+        p.method AS payment_method,
+        p.paypal_order_id,
+        p.paypal_capture_id
+      FROM payment_events pe
+      LEFT JOIN service_requests sr ON sr.id = pe.request_id
+      LEFT JOIN payments p ON p.id = pe.payment_id
+      ORDER BY pe.created_at DESC
+      LIMIT ?`,
+    [safeLimit],
+  );
+
+  return rows.map((row) => ({
+    ...mapPaymentEventRow(row),
+    requestTopic: row.request_topic ? String(row.request_topic) : "",
+    requesterName: row.requester_name ? String(row.requester_name) : "",
+    requesterEmail: row.requester_email ? String(row.requester_email).toLowerCase() : "",
+    requestStatus: row.request_status ? String(row.request_status) : "",
+    paymentMethod: row.payment_method ? String(row.payment_method) : "paypal",
+    paypalOrderId: row.paypal_order_id ? String(row.paypal_order_id) : null,
+    paypalCaptureId: row.paypal_capture_id ? String(row.paypal_capture_id) : null,
+  }));
+}

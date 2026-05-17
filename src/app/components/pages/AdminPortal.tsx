@@ -33,6 +33,29 @@ type RequestSummary = {
   proposalPrice: number | null;
 };
 
+type PaymentEventRecord = {
+  id: string;
+  paymentId: string;
+  requestId: string;
+  status: string;
+  eventType: string;
+  eventNote: string;
+  providerEventId?: string | null;
+  amount?: number | null;
+  currency?: string | null;
+  createdAt: string;
+  requestTopic: string;
+  requesterName: string;
+  requesterEmail: string;
+  requestStatus: string;
+  paymentMethod: string;
+  paypalOrderId?: string | null;
+  paypalCaptureId?: string | null;
+};
+
+type RequestFilter = "all" | "needs_action" | "awaiting_client" | "accepted" | "paid" | "closed";
+type PaymentFilter = "all" | "pending" | "approved" | "captured" | "failed" | "refunded";
+
 type RequestDetails = {
   id: string;
   status: string;
@@ -609,6 +632,108 @@ function normalizeHeroOverlaySettings(value: unknown): HeroOverlaySettings {
   };
 }
 
+function formatUiDate(value: string | undefined) {
+  if (!value) {
+    return "—";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleString();
+}
+
+function formatMoney(amount: number | null | undefined, currency: string | null | undefined) {
+  if (!Number.isFinite(amount)) {
+    return "—";
+  }
+  return `${String(currency || "USD").toUpperCase()} ${Number(amount).toLocaleString()}`;
+}
+
+function isRecentUpdate(value: string | undefined, withinHours = 24) {
+  if (!value) {
+    return false;
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return false;
+  }
+  const diffMs = Date.now() - parsed.getTime();
+  return diffMs >= 0 && diffMs <= withinHours * 60 * 60 * 1000;
+}
+
+function getRequestSignal(status: string) {
+  switch (status) {
+    case "negotiation_requested":
+      return {
+        label: "Client requested negotiation",
+        tone: "amber",
+        bucket: "needs_action" as RequestFilter,
+      };
+    case "submitted":
+      return {
+        label: "New request. Proposal needed",
+        tone: "blue",
+        bucket: "needs_action" as RequestFilter,
+      };
+    case "proposal_sent":
+      return {
+        label: "Waiting for client response",
+        tone: "slate",
+        bucket: "awaiting_client" as RequestFilter,
+      };
+    case "proposal_updated":
+      return {
+        label: "Offer updated. Waiting for client",
+        tone: "slate",
+        bucket: "awaiting_client" as RequestFilter,
+      };
+    case "accepted_pending_payment":
+      return {
+        label: "Accepted. Awaiting payment",
+        tone: "indigo",
+        bucket: "accepted" as RequestFilter,
+      };
+    case "paid":
+      return {
+        label: "Paid",
+        tone: "green",
+        bucket: "paid" as RequestFilter,
+      };
+    case "rejected":
+      return {
+        label: "Rejected / Closed",
+        tone: "red",
+        bucket: "closed" as RequestFilter,
+      };
+    default:
+      return {
+        label: status || "Unknown",
+        tone: "slate",
+        bucket: "all" as RequestFilter,
+      };
+  }
+}
+
+function toneClasses(tone: string) {
+  if (tone === "amber") {
+    return "border-amber-200 bg-amber-50 text-amber-800";
+  }
+  if (tone === "blue") {
+    return "border-blue-200 bg-blue-50 text-blue-800";
+  }
+  if (tone === "indigo") {
+    return "border-indigo-200 bg-indigo-50 text-indigo-800";
+  }
+  if (tone === "green") {
+    return "border-green-200 bg-green-50 text-green-800";
+  }
+  if (tone === "red") {
+    return "border-red-200 bg-red-50 text-red-800";
+  }
+  return "border-gray-200 bg-gray-50 text-gray-700";
+}
+
 function flattenStringFields(value: unknown, prefix = ""): FlatField[] {
   const fields: FlatField[] = [];
 
@@ -672,7 +797,7 @@ function buildContentStateFromApi(payloadContent: unknown): ContentState {
 
 export function AdminPortal() {
   const [token, setToken] = useState(() => localStorage.getItem("memi_admin_token") || "");
-  const [tab, setTab] = useState<"requests" | "content" | "settings">("requests");
+  const [tab, setTab] = useState<"requests" | "payments" | "content" | "settings">("requests");
 
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -689,8 +814,12 @@ export function AdminPortal() {
   const [proposalNotes, setProposalNotes] = useState("");
   const [nextStatus, setNextStatus] = useState("submitted");
   const [statusSaving, setStatusSaving] = useState(false);
+  const [updateSending, setUpdateSending] = useState(false);
   const [ownerMessage, setOwnerMessage] = useState("");
   const [uploadNotice, setUploadNotice] = useState("");
+  const [requestFilter, setRequestFilter] = useState<RequestFilter>("all");
+  const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>("all");
+  const [paymentEvents, setPaymentEvents] = useState<PaymentEventRecord[]>([]);
 
   const [contentState, setContentState] = useState<ContentState>({
     homepage: { heroImage: "", heroAlt: "" },
@@ -772,6 +901,15 @@ export function AdminPortal() {
     setSettingsEmail(payload.admin?.email || "");
   };
 
+  const loadPaymentEvents = async () => {
+    const response = await fetch("/api/admin/payments/history", { headers: authHeaders });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error || "Failed to load payments history");
+    }
+    setPaymentEvents(Array.isArray(payload.events) ? payload.events : []);
+  };
+
   useEffect(() => {
     if (!token) {
       return;
@@ -781,7 +919,7 @@ export function AdminPortal() {
       try {
         setLoading(true);
         setApiError("");
-        await Promise.all([loadRequests(), loadContent(), loadSettings()]);
+        await Promise.all([loadRequests(), loadContent(), loadSettings(), loadPaymentEvents()]);
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to load admin data";
         setApiError(message);
@@ -810,6 +948,22 @@ export function AdminPortal() {
 
     fetchSelected();
   }, [selectedId, token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = String(params.get("tab") || "").trim();
+    const requestIdParam = String(params.get("requestId") || "").trim();
+    if (tabParam === "requests" || tabParam === "payments" || tabParam === "content" || tabParam === "settings") {
+      setTab(tabParam);
+    }
+    if (requestIdParam) {
+      setSelectedId(requestIdParam);
+      setTab("requests");
+    }
+  }, [token]);
 
   const login = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -853,60 +1007,70 @@ export function AdminPortal() {
     localStorage.removeItem("memi_admin_token");
     setToken("");
     setRequests([]);
+    setPaymentEvents([]);
     setSelectedId("");
     setSelectedRequest(null);
     setApiError("");
   };
 
-  const sendProposal = async (event: React.FormEvent) => {
+  const sendClientUpdate = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!selectedRequest) {
       return;
     }
-    try {
-      setApiError("");
-      const response = await fetch(`/api/admin/requests/${selectedRequest.id}/proposal`, {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({
-          price: Number(proposalPrice),
-          currency: proposalCurrency,
-          timeline: proposalTimeline,
-          notes: proposalNotes,
-        }),
-      });
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.error || "Unable to send proposal");
-      }
-      setSelectedRequest(payload.request);
-      await loadRequests();
-    } catch (err) {
-      setApiError(err instanceof Error ? err.message : "Unable to send proposal");
-    }
-  };
 
-  const sendMessage = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!selectedRequest || !ownerMessage.trim()) {
+    const hasProposal = proposalPrice.trim().length > 0;
+    const messageToSend = ownerMessage.trim();
+    const hasMessage = messageToSend.length > 0;
+    if (!hasProposal && !hasMessage) {
+      setApiError("Add a proposal price and/or message before sending.");
       return;
     }
+
     try {
+      setUpdateSending(true);
       setApiError("");
-      const response = await fetch(`/api/admin/requests/${selectedRequest.id}/message`, {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({ message: ownerMessage.trim() }),
-      });
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.error || "Unable to send message");
+
+      let updatedRequest = selectedRequest;
+
+      if (hasProposal) {
+        const response = await fetch(`/api/admin/requests/${selectedRequest.id}/proposal`, {
+          method: "POST",
+          headers: authHeaders,
+          body: JSON.stringify({
+            price: Number(proposalPrice),
+            currency: proposalCurrency,
+            timeline: proposalTimeline,
+            notes: proposalNotes,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.error || "Unable to send proposal");
+        }
+        updatedRequest = payload.request;
       }
-      setSelectedRequest(payload.request);
+
+      if (hasMessage) {
+        const response = await fetch(`/api/admin/requests/${selectedRequest.id}/message`, {
+          method: "POST",
+          headers: authHeaders,
+          body: JSON.stringify({ message: messageToSend }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.error || "Unable to send message");
+        }
+        updatedRequest = payload.request;
+      }
+
+      setSelectedRequest(updatedRequest);
       setOwnerMessage("");
-      await loadRequests();
+      await Promise.all([loadRequests(), loadPaymentEvents()]);
     } catch (err) {
-      setApiError(err instanceof Error ? err.message : "Unable to send message");
+      setApiError(err instanceof Error ? err.message : "Unable to send update");
+    } finally {
+      setUpdateSending(false);
     }
   };
 
@@ -929,6 +1093,7 @@ export function AdminPortal() {
       setSelectedRequest(payload.request);
       setNextStatus(payload.request?.status || status);
       await loadRequests();
+      await loadPaymentEvents();
     } catch (err) {
       setApiError(err instanceof Error ? err.message : "Unable to update status");
     } finally {
@@ -1282,6 +1447,58 @@ export function AdminPortal() {
     }
   }, [activeFieldKind, activeKindCounts]);
 
+  const requestSummaryByFilter = useMemo(() => {
+    const summary: Record<RequestFilter, number> = {
+      all: requests.length,
+      needs_action: 0,
+      awaiting_client: 0,
+      accepted: 0,
+      paid: 0,
+      closed: 0,
+    };
+
+    for (const request of requests) {
+      const signal = getRequestSignal(request.status);
+      if (signal.bucket !== "all") {
+        summary[signal.bucket] += 1;
+      }
+    }
+
+    return summary;
+  }, [requests]);
+
+  const filteredRequests = useMemo(() => {
+    if (requestFilter === "all") {
+      return requests;
+    }
+    return requests.filter((request) => getRequestSignal(request.status).bucket === requestFilter);
+  }, [requestFilter, requests]);
+
+  const paymentSummaryByStatus = useMemo(() => {
+    const summary: Record<PaymentFilter, number> = {
+      all: paymentEvents.length,
+      pending: 0,
+      approved: 0,
+      captured: 0,
+      failed: 0,
+      refunded: 0,
+    };
+    for (const event of paymentEvents) {
+      const key = String(event.status || "").toLowerCase() as PaymentFilter;
+      if (key in summary && key !== "all") {
+        summary[key] += 1;
+      }
+    }
+    return summary;
+  }, [paymentEvents]);
+
+  const filteredPaymentEvents = useMemo(() => {
+    if (paymentFilter === "all") {
+      return paymentEvents;
+    }
+    return paymentEvents.filter((event) => String(event.status || "").toLowerCase() === paymentFilter);
+  }, [paymentEvents, paymentFilter]);
+
   const resetContentDraft = () => {
     setContentDraft(contentState);
     setContentMode("edit");
@@ -1573,6 +1790,15 @@ export function AdminPortal() {
           </button>
           <button
             type="button"
+            onClick={() => setTab("payments")}
+            className={`rounded-lg px-4 py-2 text-sm font-medium ${
+              tab === "payments" ? "bg-[#111a34] text-white" : "bg-gray-100 text-gray-700"
+            }`}
+          >
+            Payments
+          </button>
+          <button
+            type="button"
             onClick={() => setTab("settings")}
             className={`rounded-lg px-4 py-2 text-sm font-medium ${
               tab === "settings" ? "bg-[#111a34] text-white" : "bg-gray-100 text-gray-700"
@@ -1590,24 +1816,64 @@ export function AdminPortal() {
           <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
             <div className="rounded-xl border border-gray-200 p-4">
               <h2 className="mb-3 text-sm font-semibold text-[#1a2740]">Incoming Requests</h2>
-              <div className="space-y-2">
-                {requests.map((requestItem) => (
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                {[
+                  { key: "all" as const, label: "All" },
+                  { key: "needs_action" as const, label: "Needs Action" },
+                  { key: "awaiting_client" as const, label: "Awaiting Client" },
+                  { key: "accepted" as const, label: "Accepted" },
+                  { key: "paid" as const, label: "Paid" },
+                  { key: "closed" as const, label: "Closed" },
+                ].map((filterItem) => (
                   <button
+                    key={filterItem.key}
                     type="button"
-                    key={requestItem.id}
-                    onClick={() => setSelectedId(requestItem.id)}
-                    className={`w-full rounded-lg border px-3 py-2 text-left text-sm ${
-                      selectedId === requestItem.id
-                        ? "border-[#111a34] bg-[#111a34]/5"
-                        : "border-gray-200 hover:bg-gray-50"
+                    onClick={() => setRequestFilter(filterItem.key)}
+                    className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${
+                      requestFilter === filterItem.key
+                        ? "border-[#111a34] bg-[#111a34] text-white"
+                        : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
                     }`}
                   >
-                    <p className="font-semibold text-[#1a2740]">{requestItem.name}</p>
-                    <p className="text-xs text-gray-500">{requestItem.topic}</p>
-                    <p className="text-xs text-gray-500">Status: {requestItem.status}</p>
+                    {filterItem.label} ({requestSummaryByFilter[filterItem.key]})
                   </button>
                 ))}
-                {!requests.length ? <p className="text-sm text-gray-500">No requests yet.</p> : null}
+              </div>
+              <div className="space-y-2">
+                {filteredRequests.map((requestItem) => {
+                  const signal = getRequestSignal(requestItem.status);
+                  return (
+                    <button
+                      type="button"
+                      key={requestItem.id}
+                      onClick={() => setSelectedId(requestItem.id)}
+                      className={`w-full rounded-lg border px-3 py-2 text-left text-sm ${
+                        selectedId === requestItem.id
+                          ? "border-[#111a34] bg-[#111a34]/5"
+                          : "border-gray-200 hover:bg-gray-50"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-semibold text-[#1a2740]">{requestItem.name}</p>
+                        {isRecentUpdate(requestItem.updatedAt) ? (
+                          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-800">
+                            New
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="text-xs text-gray-500 line-clamp-1">{requestItem.topic}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${toneClasses(signal.tone)}`}>
+                          {signal.label}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] text-gray-500">Updated: {formatUiDate(requestItem.updatedAt)}</p>
+                    </button>
+                  );
+                })}
+                {!filteredRequests.length ? (
+                  <p className="text-sm text-gray-500">No requests in this filter.</p>
+                ) : null}
               </div>
             </div>
 
@@ -1628,6 +1894,9 @@ export function AdminPortal() {
                         ? ` • ${selectedRequest.payment.currency || "USD"} ${selectedRequest.payment.amount.toLocaleString()}`
                         : ""}
                     </p>
+                    <div className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${toneClasses(getRequestSignal(selectedRequest.status).tone)}`}>
+                      {getRequestSignal(selectedRequest.status).label}
+                    </div>
                     <p className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{selectedRequest.description}</p>
                     <a
                       href={selectedRequest.accessLink}
@@ -1668,17 +1937,19 @@ export function AdminPortal() {
                     </div>
                   </div>
 
-                  <form onSubmit={sendProposal} className="rounded-lg border border-gray-200 p-4">
-                    <h3 className="mb-3 text-sm font-semibold text-[#1a2740]">Send Price Proposal</h3>
+                  <form onSubmit={sendClientUpdate} className="rounded-lg border border-gray-200 p-4">
+                    <h3 className="mb-1 text-sm font-semibold text-[#1a2740]">Send Client Update</h3>
+                    <p className="mb-3 text-xs text-gray-500">
+                      One action for everything: update offer, add message, or both.
+                    </p>
                     <div className="grid gap-3 md:grid-cols-2">
                       <input
                         type="number"
                         min="1"
                         value={proposalPrice}
                         onChange={(e) => setProposalPrice(e.target.value)}
-                        placeholder="Price"
+                        placeholder="Price (optional)"
                         className="rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                        required
                       />
                       <input
                         type="text"
@@ -1698,34 +1969,53 @@ export function AdminPortal() {
                         rows={3}
                         value={proposalNotes}
                         onChange={(e) => setProposalNotes(e.target.value)}
-                        placeholder="Notes shown to the client"
+                        placeholder="Proposal notes shown to client"
                         className="rounded-lg border border-gray-200 px-3 py-2 text-sm md:col-span-2"
                       />
                     </div>
-                    <button
-                      type="submit"
-                      className="mt-3 rounded-lg bg-[#111a34] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1a2b52]"
-                    >
-                      Send Proposal
-                    </button>
-                  </form>
-
-                  <form onSubmit={sendMessage} className="rounded-lg border border-gray-200 p-4">
-                    <h3 className="mb-3 text-sm font-semibold text-[#1a2740]">Reply to Client</h3>
                     <textarea
                       rows={3}
                       value={ownerMessage}
                       onChange={(e) => setOwnerMessage(e.target.value)}
-                      placeholder="Write a message..."
-                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                      placeholder="Message to client (optional)"
+                      className="mt-3 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
                     />
                     <button
                       type="submit"
-                      className="mt-3 rounded-lg border border-[#111a34] px-4 py-2 text-sm font-semibold text-[#111a34] hover:bg-[#111a34] hover:text-white"
+                      disabled={updateSending}
+                      className="mt-3 rounded-lg bg-[#111a34] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1a2b52] disabled:opacity-60"
                     >
-                      Send Message
+                      {updateSending ? "Sending..." : "Send Update"}
                     </button>
                   </form>
+
+                  <div className="rounded-lg border border-gray-200 p-4">
+                    <h3 className="mb-3 text-sm font-semibold text-[#1a2740]">Conversation Timeline</h3>
+                    {!selectedRequest.messages?.length ? (
+                      <p className="text-xs text-gray-500">No conversation yet.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {selectedRequest.messages
+                          .slice()
+                          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                          .map((message) => (
+                            <div key={message.id} className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                                    message.authorRole === "user" ? "bg-amber-100 text-amber-800" : "bg-[#111a34]/10 text-[#111a34]"
+                                  }`}
+                                >
+                                  {message.authorRole === "user" ? "Client" : "Owner"}
+                                </span>
+                                <span className="text-[11px] text-gray-500">{formatUiDate(message.createdAt)}</span>
+                              </div>
+                              <p className="mt-1 whitespace-pre-wrap text-xs text-gray-700">{message.body}</p>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
 
                   <div className="rounded-lg border border-gray-200 p-4">
                     <h3 className="mb-2 text-sm font-semibold text-[#1a2740]">Request Status</h3>
@@ -1753,41 +2043,93 @@ export function AdminPortal() {
                     </div>
                   </div>
 
-                  <div className="rounded-lg border border-gray-200 p-4">
-                    <h3 className="mb-2 text-sm font-semibold text-[#1a2740]">Payment History</h3>
-                    {!selectedRequest.paymentHistory || selectedRequest.paymentHistory.length === 0 ? (
-                      <p className="text-xs text-gray-500">No payment events recorded yet.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {selectedRequest.paymentHistory.map((event) => (
-                          <div key={event.id} className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a2740]">
-                                {event.eventType.replace(/_/g, " ")}
-                              </p>
-                              <p className="text-[11px] text-gray-500">
-                                {event.createdAt ? new Date(event.createdAt).toLocaleString() : "—"}
-                              </p>
-                            </div>
-                            <p className="mt-1 text-xs text-gray-700">{event.eventNote || "Status updated."}</p>
-                            <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
-                              <span>Status: {event.status}</span>
-                              {event.amount != null ? (
-                                <span>
-                                  Amount: {event.currency || selectedRequest.payment?.currency || "USD"}{" "}
-                                  {event.amount.toLocaleString()}
-                                </span>
-                              ) : null}
-                              {event.providerEventId ? <span>Ref: {event.providerEventId}</span> : null}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
                 </div>
               )}
             </div>
+          </div>
+        ) : null}
+
+        {tab === "payments" ? (
+          <div className="rounded-xl border border-gray-200 p-6">
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold text-[#1a2740]">Account Payment History</h2>
+              <p className="text-sm text-gray-500">All payment events across all requests in one place.</p>
+            </div>
+
+            <div className="mb-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
+              {[
+                { key: "all" as const, label: "All" },
+                { key: "pending" as const, label: "Pending" },
+                { key: "approved" as const, label: "Approved" },
+                { key: "captured" as const, label: "Captured" },
+                { key: "failed" as const, label: "Failed" },
+                { key: "refunded" as const, label: "Refunded" },
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setPaymentFilter(item.key)}
+                  className={`rounded-lg border px-3 py-2 text-left text-xs font-semibold ${
+                    paymentFilter === item.key
+                      ? "border-[#111a34] bg-[#111a34] text-white"
+                      : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  <p>{item.label}</p>
+                  <p className={`mt-1 text-[11px] ${paymentFilter === item.key ? "text-white/80" : "text-gray-500"}`}>
+                    {paymentSummaryByStatus[item.key]}
+                  </p>
+                </button>
+              ))}
+            </div>
+
+            {!filteredPaymentEvents.length ? (
+              <p className="text-sm text-gray-500">No payment events for this filter.</p>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-gray-200">
+                <table className="min-w-full divide-y divide-gray-200 text-sm">
+                  <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                    <tr>
+                      <th className="px-3 py-2 text-left">When</th>
+                      <th className="px-3 py-2 text-left">Request</th>
+                      <th className="px-3 py-2 text-left">Client</th>
+                      <th className="px-3 py-2 text-left">Event</th>
+                      <th className="px-3 py-2 text-left">Amount</th>
+                      <th className="px-3 py-2 text-left">Status</th>
+                      <th className="px-3 py-2 text-left">Reference</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 bg-white">
+                    {filteredPaymentEvents.map((event) => (
+                      <tr key={event.id}>
+                        <td className="px-3 py-2 text-xs text-gray-600">{formatUiDate(event.createdAt)}</td>
+                        <td className="px-3 py-2">
+                          <p className="font-medium text-[#1a2740]">{event.requestTopic || event.requestId}</p>
+                          <p className="text-xs text-gray-500">Request status: {event.requestStatus || "—"}</p>
+                        </td>
+                        <td className="px-3 py-2">
+                          <p className="text-[#1a2740]">{event.requesterName || "—"}</p>
+                          <p className="text-xs text-gray-500">{event.requesterEmail || "—"}</p>
+                        </td>
+                        <td className="px-3 py-2">
+                          <p className="text-[#1a2740]">{event.eventType.replace(/_/g, " ")}</p>
+                          <p className="text-xs text-gray-500">{event.eventNote || "—"}</p>
+                        </td>
+                        <td className="px-3 py-2 text-[#1a2740]">{formatMoney(event.amount, event.currency)}</td>
+                        <td className="px-3 py-2">
+                          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${toneClasses(String(event.status || "").toLowerCase() === "captured" ? "green" : String(event.status || "").toLowerCase() === "failed" ? "red" : String(event.status || "").toLowerCase() === "refunded" ? "amber" : "slate")}`}>
+                            {event.status}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-xs text-gray-600">
+                          {event.paypalCaptureId || event.paypalOrderId || event.providerEventId || "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         ) : null}
 

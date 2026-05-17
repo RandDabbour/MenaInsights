@@ -41,6 +41,7 @@ import { dispatchEmail } from "./services/emailService.mjs";
 import { getSiteContentState, saveSiteContentState } from "./services/siteContentService.mjs";
 import { registerMediaFile } from "./services/mediaFilesService.mjs";
 import { listRecentEmails } from "./repositories/emailOutboxRepository.mjs";
+import { listPaymentEventsForAdmin } from "./repositories/paymentEventsRepository.mjs";
 import {
   assertValidEmail,
   normalizeEmail,
@@ -76,6 +77,9 @@ const CORS_ALLOW_ORIGIN = String(process.env.CORS_ALLOW_ORIGIN || PUBLIC_BASE_UR
 const JWT_SECRET = String(process.env.JWT_SECRET || "");
 const PAYPAL_WEBHOOK_ID = String(process.env.PAYPAL_WEBHOOK_ID || "").trim();
 const PAYPAL_CONFIG = getPaypalPublicConfig();
+const RESEND_API_KEY = String(process.env.RESEND_API_KEY || "").trim();
+const RESEND_FROM = String(process.env.RESEND_FROM || "").trim();
+const EMAIL_DELIVERY_CONFIGURED = Boolean(RESEND_API_KEY && RESEND_FROM);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "..");
@@ -234,6 +238,10 @@ function getRequestAccessLink(accessToken) {
   return `${PUBLIC_BASE_URL}/request/${accessToken}`;
 }
 
+function getAdminRequestLink(requestId) {
+  return `${PUBLIC_BASE_URL}/admin?tab=requests&requestId=${encodeURIComponent(requestId)}`;
+}
+
 async function requireAdmin(req) {
   const token = getBearerToken(req);
   const admin = await getAdminFromBearerToken(token);
@@ -274,6 +282,7 @@ async function handleRequestSubmission(req, res) {
   const form = validateRequestSubmissionInput(body);
   const requestRecord = await createRequest({ form });
   const accessLink = getRequestAccessLink(requestRecord.accessToken);
+  const adminLink = getAdminRequestLink(requestRecord.id);
 
   await dispatchEmail({
     to: requestRecord.email,
@@ -286,8 +295,8 @@ async function handleRequestSubmission(req, res) {
   await dispatchEmail({
     to: await getPrimaryAdminEmail(),
     subject: "New service request received",
-    text: `A new request was submitted by ${requestRecord.name} (${requestRecord.email}).`,
-    html: `<p>A new request was submitted by <strong>${requestRecord.name}</strong> (${requestRecord.email}).</p>`,
+    text: `A new request was submitted by ${requestRecord.name} (${requestRecord.email}). Open in admin: ${adminLink}`,
+    html: `<p>A new request was submitted by <strong>${requestRecord.name}</strong> (${requestRecord.email}).</p><p><a href="${adminLink}">Open this request in Admin Portal</a></p>`,
     metadata: { requestId: requestRecord.id, event: "owner_new_request" },
   });
 
@@ -325,13 +334,23 @@ async function handlePublicResponseAction(req, res, accessToken, body) {
     action,
     message,
   });
+  const accessLink = getRequestAccessLink(updated.accessToken);
+  const adminLink = getAdminRequestLink(updated.id);
 
   await dispatchEmail({
     to: await getPrimaryAdminEmail(),
     subject: `Request update: ${updated.topic}`,
-    text: `User selected action "${action}" on request ${updated.id}.`,
-    html: `<p>User selected action "<strong>${action}</strong>" on request ${updated.id}.</p>`,
+    text: `User selected action "${action}" on request ${updated.id}. Open: ${adminLink}`,
+    html: `<p>User selected action "<strong>${action}</strong>" on request ${updated.id}.</p><p><a href="${adminLink}">Open this request in Admin Portal</a></p>`,
     metadata: { requestId: updated.id, event: `user_${action}` },
+  });
+
+  await dispatchEmail({
+    to: updated.email,
+    subject: "Your request action was received",
+    text: `We recorded your "${action}" action. Track updates here: ${accessLink}`,
+    html: `<p>We recorded your "<strong>${action}</strong>" action.</p><p><a href="${accessLink}">Open your request portal</a></p>`,
+    metadata: { requestId: updated.id, event: `user_${action}_confirmation` },
   });
 
   sendJson(res, 200, { request: toPublicRequestPayload(updated) });
@@ -430,19 +449,21 @@ async function handlePaypalCaptureOrder(req, res, requestId) {
     });
 
     if (!updated.wasAlreadyPaid) {
+      const adminLink = getAdminRequestLink(updated.id);
+      const accessLink = getRequestAccessLink(updated.accessToken);
       await dispatchEmail({
         to: await getPrimaryAdminEmail(),
         subject: `Payment received for request ${updated.id}`,
-        text: `PayPal payment was captured for request ${updated.id}.`,
-        html: `<p>PayPal payment was captured for request <strong>${updated.id}</strong>.</p>`,
+        text: `PayPal payment was captured for request ${updated.id}. Open: ${adminLink}`,
+        html: `<p>PayPal payment was captured for request <strong>${updated.id}</strong>.</p><p><a href="${adminLink}">Open this request in Admin Portal</a></p>`,
         metadata: { requestId: updated.id, event: "payment_captured" },
       });
 
       await dispatchEmail({
         to: updated.email,
         subject: "Payment confirmed",
-        text: `Your PayPal payment for request ${updated.id} is confirmed.`,
-        html: `<p>Your PayPal payment for request <strong>${updated.id}</strong> is confirmed.</p>`,
+        text: `Your PayPal payment for request ${updated.id} is confirmed. Portal: ${accessLink}`,
+        html: `<p>Your PayPal payment for request <strong>${updated.id}</strong> is confirmed.</p><p><a href="${accessLink}">Open your request portal</a></p>`,
         metadata: { requestId: updated.id, event: "payment_confirmed_user" },
       });
     }
@@ -499,27 +520,70 @@ async function handlePaypalWebhook(req, res) {
       });
 
       if (!updated.wasAlreadyPaid) {
+        const adminLink = getAdminRequestLink(updated.id);
+        const accessLink = getRequestAccessLink(updated.accessToken);
         await dispatchEmail({
           to: await getPrimaryAdminEmail(),
           subject: `Payment received for request ${updated.id}`,
-          text: `PayPal payment was captured for request ${updated.id}.`,
-          html: `<p>PayPal payment was captured for request <strong>${updated.id}</strong>.</p>`,
+          text: `PayPal payment was captured for request ${updated.id}. Open: ${adminLink}`,
+          html: `<p>PayPal payment was captured for request <strong>${updated.id}</strong>.</p><p><a href="${adminLink}">Open this request in Admin Portal</a></p>`,
           metadata: { requestId: updated.id, event: "payment_captured_webhook" },
+        });
+        await dispatchEmail({
+          to: updated.email,
+          subject: "Payment confirmed",
+          text: `Your PayPal payment for request ${updated.id} is confirmed. Portal: ${accessLink}`,
+          html: `<p>Your PayPal payment for request <strong>${updated.id}</strong> is confirmed.</p><p><a href="${accessLink}">Open your request portal</a></p>`,
+          metadata: { requestId: updated.id, event: "payment_captured_webhook_user" },
         });
       }
     }
   } else if (eventType === "PAYMENT.CAPTURE.DENIED") {
     const requestRecord = orderId ? await findRequestByPaypalOrderId(orderId) : null;
     if (requestRecord) {
-      await markPaymentFailed({
+      const updated = await markPaymentFailed({
         requestId: requestRecord.id,
         paypalOrderId: orderId || requestRecord.payment?.paypalOrderId || null,
         rawProviderResponse: rawEvent,
       });
+      const adminLink = getAdminRequestLink(updated.id);
+      const accessLink = getRequestAccessLink(updated.accessToken);
+      await dispatchEmail({
+        to: await getPrimaryAdminEmail(),
+        subject: `Payment failed for request ${updated.id}`,
+        text: `PayPal payment was denied for request ${updated.id}. Open: ${adminLink}`,
+        html: `<p>PayPal payment was denied for request <strong>${updated.id}</strong>.</p><p><a href="${adminLink}">Open this request in Admin Portal</a></p>`,
+        metadata: { requestId: updated.id, event: "payment_denied_webhook" },
+      });
+      await dispatchEmail({
+        to: updated.email,
+        subject: "Payment attempt failed",
+        text: `Your payment attempt could not be completed. You can retry from your portal: ${accessLink}`,
+        html: `<p>Your payment attempt could not be completed.</p><p><a href="${accessLink}">Open your request portal</a></p>`,
+        metadata: { requestId: updated.id, event: "payment_denied_webhook_user" },
+      });
     }
   } else if (eventType === "PAYMENT.CAPTURE.REFUNDED") {
     if (captureId) {
-      await markPaymentRefundedByCaptureId(captureId, rawEvent);
+      const updated = await markPaymentRefundedByCaptureId(captureId, rawEvent);
+      if (updated) {
+        const adminLink = getAdminRequestLink(updated.id);
+        const accessLink = getRequestAccessLink(updated.accessToken);
+        await dispatchEmail({
+          to: await getPrimaryAdminEmail(),
+          subject: `Payment refunded for request ${updated.id}`,
+          text: `A PayPal refund was confirmed for request ${updated.id}. Open: ${adminLink}`,
+          html: `<p>A PayPal refund was confirmed for request <strong>${updated.id}</strong>.</p><p><a href="${adminLink}">Open this request in Admin Portal</a></p>`,
+          metadata: { requestId: updated.id, event: "payment_refunded_webhook" },
+        });
+        await dispatchEmail({
+          to: updated.email,
+          subject: "Refund confirmed",
+          text: `Your refund for request ${updated.id} was confirmed. Portal: ${accessLink}`,
+          html: `<p>Your refund for request <strong>${updated.id}</strong> was confirmed.</p><p><a href="${accessLink}">Open your request portal</a></p>`,
+          metadata: { requestId: updated.id, event: "payment_refunded_webhook_user" },
+        });
+      }
     }
   }
 
@@ -660,6 +724,21 @@ async function handleAdminApi(req, res, pathname) {
     return;
   }
 
+  if (pathname === "/api/admin/payments/history" && req.method === "GET") {
+    const events = await listPaymentEventsForAdmin(500);
+    const summary = events.reduce(
+      (acc, event) => {
+        const key = String(event.status || "pending");
+        acc.total += 1;
+        acc.byStatus[key] = (acc.byStatus[key] || 0) + 1;
+        return acc;
+      },
+      { total: 0, byStatus: {} },
+    );
+    sendJson(res, 200, { events, summary });
+    return;
+  }
+
   const requestByIdMatch = pathname.match(/^\/api\/admin\/requests\/([^/]+)$/);
   if (requestByIdMatch && req.method === "GET") {
     const requestRecord = await getRequestById(decodeURIComponent(requestByIdMatch[1]));
@@ -677,12 +756,20 @@ async function handleAdminApi(req, res, pathname) {
     const updated = await applyProposal({ requestId, proposal });
 
     const accessLink = getRequestAccessLink(updated.accessToken);
+    const adminLink = getAdminRequestLink(updated.id);
     await dispatchEmail({
       to: updated.email,
       subject: "Your proposal is ready",
       text: `Your proposal is ready. Review and respond here: ${accessLink}`,
       html: `<p>Your proposal is ready.</p><p><a href="${accessLink}">Review your request</a></p>`,
       metadata: { requestId: updated.id, event: "proposal_sent" },
+    });
+    await dispatchEmail({
+      to: await getPrimaryAdminEmail(),
+      subject: `Proposal sent for request ${updated.id}`,
+      text: `Your proposal was sent to the requester. Open request: ${adminLink}`,
+      html: `<p>Your proposal was sent to the requester.</p><p><a href="${adminLink}">Open this request in Admin Portal</a></p>`,
+      metadata: { requestId: updated.id, event: "proposal_sent_admin_copy" },
     });
 
     sendJson(res, 200, { request: toAdminRequestPayload(updated, accessLink) });
@@ -697,12 +784,20 @@ async function handleAdminApi(req, res, pathname) {
     const updated = await applyOwnerMessage({ requestId, message });
 
     const accessLink = getRequestAccessLink(updated.accessToken);
+    const adminLink = getAdminRequestLink(updated.id);
     await dispatchEmail({
       to: updated.email,
       subject: "Update on your request",
       text: `There is a new message about your request: ${accessLink}`,
       html: `<p>There is a new message about your request.</p><p><a href="${accessLink}">Open request</a></p>`,
       metadata: { requestId: updated.id, event: "owner_message" },
+    });
+    await dispatchEmail({
+      to: await getPrimaryAdminEmail(),
+      subject: `Message sent for request ${updated.id}`,
+      text: `Your message was sent to the requester. Open request: ${adminLink}`,
+      html: `<p>Your message was sent to the requester.</p><p><a href="${adminLink}">Open this request in Admin Portal</a></p>`,
+      metadata: { requestId: updated.id, event: "owner_message_admin_copy" },
     });
 
     sendJson(res, 200, { request: toAdminRequestPayload(updated, accessLink) });
@@ -715,6 +810,22 @@ async function handleAdminApi(req, res, pathname) {
     const body = await parseBody(req);
     const { nextStatus } = validateStatusUpdateInput(body, MUTABLE_STATUSES);
     const updated = await applyStatusUpdate({ requestId, nextStatus });
+    const accessLink = getRequestAccessLink(updated.accessToken);
+    const adminLink = getAdminRequestLink(updated.id);
+    await dispatchEmail({
+      to: updated.email,
+      subject: "Your request status was updated",
+      text: `Status changed to "${nextStatus}". Track your request: ${accessLink}`,
+      html: `<p>Your request status changed to "<strong>${nextStatus}</strong>".</p><p><a href="${accessLink}">Open your request portal</a></p>`,
+      metadata: { requestId: updated.id, event: "status_updated_user" },
+    });
+    await dispatchEmail({
+      to: await getPrimaryAdminEmail(),
+      subject: `Status updated for request ${updated.id}`,
+      text: `Status changed to "${nextStatus}". Open request: ${adminLink}`,
+      html: `<p>Status changed to "<strong>${nextStatus}</strong>".</p><p><a href="${adminLink}">Open this request in Admin Portal</a></p>`,
+      metadata: { requestId: updated.id, event: "status_updated_admin_copy" },
+    });
     sendJson(res, 200, {
       request: toAdminRequestPayload(updated, getRequestAccessLink(updated.accessToken)),
     });
@@ -776,6 +887,7 @@ app.use(async (req, res, next) => {
         ok: true,
         now: nowIso(),
         adminEmail: await getPrimaryAdminEmail(),
+        emailDeliveryConfigured: EMAIL_DELIVERY_CONFIGURED,
       });
       return;
     }
@@ -919,6 +1031,8 @@ async function startServer() {
     console.log(`PayPal mode: ${PAYPAL_CONFIG.mode}`);
     // eslint-disable-next-line no-console
     console.log(`PayPal configured: ${isPaypalConfigured() ? "yes" : "no"}`);
+    // eslint-disable-next-line no-console
+    console.log(`Email delivery configured: ${EMAIL_DELIVERY_CONFIGURED ? "yes" : "no (queue only)"}`);
   });
 
   for (const signal of ["SIGINT", "SIGTERM"]) {

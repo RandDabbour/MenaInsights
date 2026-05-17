@@ -756,13 +756,14 @@ function deepMerge<T>(base: T, override: unknown): T {
       return base as T;
     }
 
-    const merged = base.map((item, index) => deepMerge(item, override[index]));
-    if (override.length > base.length) {
-      for (let i = base.length; i < override.length; i += 1) {
-        merged.push(override[i] as (typeof merged)[number]);
+    // Preserve admin-managed list length exactly as saved.
+    // If an admin deletes items, defaults should not re-appear.
+    return override.map((item, index) => {
+      if (index < base.length) {
+        return deepMerge(base[index], item);
       }
-    }
-    return merged as T;
+      return item;
+    }) as T;
   }
 
   if (!isPlainObject(base)) {

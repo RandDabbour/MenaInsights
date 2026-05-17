@@ -301,6 +301,16 @@ const QUICK_EDIT_FIELDS: QuickEditField[] = [
 
 const CONTENT_HIDDEN_PATHS = new Set(["updatedAt", "siteContent.pages.homepage.heroImage", "siteContent.pages.homepage.heroAlt"]);
 
+const ADMIN_STATUS_OPTIONS = [
+  { value: "submitted", label: "Submitted" },
+  { value: "proposal_sent", label: "Proposal Sent" },
+  { value: "negotiation_requested", label: "Negotiation Requested" },
+  { value: "proposal_updated", label: "Proposal Updated" },
+  { value: "accepted_pending_payment", label: "Accepted - Pending Payment" },
+  { value: "paid", label: "Paid" },
+  { value: "rejected", label: "Rejected" },
+] as const;
+
 function isVisibleContentField(path: string): boolean {
   return !CONTENT_HIDDEN_PATHS.has(path);
 }
@@ -642,6 +652,8 @@ export function AdminPortal() {
   const [proposalCurrency, setProposalCurrency] = useState("USD");
   const [proposalTimeline, setProposalTimeline] = useState("");
   const [proposalNotes, setProposalNotes] = useState("");
+  const [nextStatus, setNextStatus] = useState("submitted");
+  const [statusSaving, setStatusSaving] = useState(false);
   const [ownerMessage, setOwnerMessage] = useState("");
   const [uploadNotice, setUploadNotice] = useState("");
 
@@ -701,6 +713,7 @@ export function AdminPortal() {
     setProposalCurrency(payload.request?.proposal?.currency || "USD");
     setProposalTimeline(payload.request?.proposal?.timeline || "");
     setProposalNotes(payload.request?.proposal?.notes || "");
+    setNextStatus(payload.request?.status || "submitted");
   };
 
   const loadContent = async () => {
@@ -867,6 +880,7 @@ export function AdminPortal() {
       return;
     }
     try {
+      setStatusSaving(true);
       setApiError("");
       const response = await fetch(`/api/admin/requests/${selectedRequest.id}/status`, {
         method: "PATCH",
@@ -878,9 +892,12 @@ export function AdminPortal() {
         throw new Error(payload.error || "Unable to update status");
       }
       setSelectedRequest(payload.request);
+      setNextStatus(payload.request?.status || status);
       await loadRequests();
     } catch (err) {
       setApiError(err instanceof Error ? err.message : "Unable to update status");
+    } finally {
+      setStatusSaving(false);
     }
   };
 
@@ -1700,18 +1717,28 @@ export function AdminPortal() {
                   </form>
 
                   <div className="rounded-lg border border-gray-200 p-4">
-                    <h3 className="mb-3 text-sm font-semibold text-[#1a2740]">Quick Status</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {["proposal_sent", "proposal_updated", "accepted_pending_payment", "paid", "rejected"].map((status) => (
-                        <button
-                          key={status}
-                          type="button"
-                          onClick={() => updateStatus(status)}
-                          className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                        >
-                          {status}
-                        </button>
-                      ))}
+                    <h3 className="mb-2 text-sm font-semibold text-[#1a2740]">Request Status</h3>
+                    <p className="mb-3 text-xs text-gray-500">Select a status and apply it. This replaces the old quick-status chips.</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        value={nextStatus}
+                        onChange={(event) => setNextStatus(event.target.value)}
+                        className="min-w-[240px] rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                      >
+                        {ADMIN_STATUS_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={statusSaving || nextStatus === selectedRequest.status}
+                        onClick={() => updateStatus(nextStatus)}
+                        className="rounded-lg bg-[#111a34] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1a2b52] disabled:opacity-60"
+                      >
+                        {statusSaving ? "Updating..." : "Update Status"}
+                      </button>
                     </div>
                   </div>
                 </div>

@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
+import { AlertCircle, CheckCircle2, Clock3, FileText, MessageSquare, Wallet, XCircle } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router";
 
 type PublicRequest = {
   id: string;
   status: string;
+  createdAt?: string;
+  updatedAt?: string;
   request: {
     name: string;
     email: string;
@@ -56,6 +59,33 @@ const STATUS_LABELS: Record<string, string> = {
   paid: "Paid",
   rejected: "Rejected",
 };
+
+const STATUS_STEPS = [
+  { key: "submitted", label: "Submitted" },
+  { key: "proposal_sent", label: "Proposal Sent" },
+  { key: "proposal_updated", label: "Proposal Updated" },
+  { key: "accepted_pending_payment", label: "Accepted" },
+  { key: "paid", label: "Paid" },
+] as const;
+
+function resolveStatusStepIndex(status: string) {
+  if (status === "negotiation_requested") {
+    return 2;
+  }
+  const index = STATUS_STEPS.findIndex((step) => step.key === status);
+  return index >= 0 ? index : 0;
+}
+
+function formatDate(value: string | undefined) {
+  if (!value) {
+    return "";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleString();
+}
 
 export function RequestPortal() {
   const { token } = useParams();
@@ -238,145 +268,254 @@ export function RequestPortal() {
     }
     return "price proposed";
   })();
+  const currentStepIndex = resolveStatusStepIndex(requestData.status);
+  const isRejected = requestData.status === "rejected";
+  const showNegotiationBox = canRespond || requestData.status === "negotiation_requested";
 
   return (
-    <div className="bg-white">
+    <div className="bg-[#f8f9fb]">
       <section className="bg-[#111a34] text-white">
-        <div className="mx-auto max-w-6xl px-6 py-14 lg:px-8">
+        <div className="mx-auto max-w-7xl px-6 py-14 lg:px-8">
           <p className="text-blue-300 text-sm font-medium uppercase tracking-wide mb-3">Request Portal</p>
           <h1 className="text-3xl font-bold mb-4" style={{ fontFamily: "'Playfair Display', serif" }}>
             {requestData.request.topic}
           </h1>
-          <span className="inline-flex rounded-full bg-white/10 px-3 py-1 text-sm">
-            Status: {STATUS_LABELS[requestData.status] || requestData.status}
-          </span>
-          <span className="ml-3 inline-flex rounded-full bg-[#d4af37]/20 px-3 py-1 text-sm text-[#f8e7ac]">
-            Payment: {paymentState}
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex rounded-full bg-white/10 px-3 py-1 text-sm">
+              Status: {STATUS_LABELS[requestData.status] || requestData.status}
+            </span>
+            <span className="inline-flex rounded-full bg-[#d4af37]/20 px-3 py-1 text-sm text-[#f8e7ac]">
+              Payment: {paymentState}
+            </span>
+            {requestData.updatedAt ? (
+              <span className="inline-flex rounded-full border border-white/20 px-3 py-1 text-xs text-white/75">
+                Last update: {formatDate(requestData.updatedAt)}
+              </span>
+            ) : null}
+          </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 py-12 lg:px-8">
-        {error ? <p className="mb-4 text-sm text-red-600">{error}</p> : null}
+      <section className="mx-auto max-w-7xl px-6 py-10 lg:px-8">
+        {error ? (
+          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        ) : null}
 
-        <div className="grid gap-8 lg:grid-cols-2">
-          <div className="rounded-xl border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-[#1a2740] mb-4">Request Details</h2>
-            <div className="space-y-2 text-sm text-gray-600">
-              <p><strong>Name:</strong> {requestData.request.name}</p>
-              <p><strong>Email:</strong> {requestData.request.email}</p>
-              <p><strong>Service:</strong> {requestData.request.service}</p>
-              <p><strong>Region:</strong> {requestData.request.region}</p>
-              <p><strong>Timeline:</strong> {requestData.request.urgency || "Not specified"}</p>
-              <p><strong>Budget:</strong> {requestData.request.budget || "Not specified"}</p>
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-[#1a2740]">Progress</h2>
+          {isRejected ? (
+            <div className="inline-flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+              <XCircle className="h-4 w-4" />
+              This request was rejected.
             </div>
-            <p className="mt-4 text-sm text-gray-700 whitespace-pre-wrap">{requestData.request.description}</p>
-          </div>
-
-          <div className="rounded-xl border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-[#1a2740] mb-4">Proposal</h2>
-            {requestData.proposal ? (
-              <div className="space-y-2 text-sm text-gray-700">
-                <p>
-                  <strong>Price:</strong> {requestData.proposal.currency} {requestData.proposal.price.toLocaleString()}
-                </p>
-                <p><strong>Timeline:</strong> {requestData.proposal.timeline || "TBD"}</p>
-                <p className="whitespace-pre-wrap">{requestData.proposal.notes || "No notes provided."}</p>
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500">No proposal yet. You will receive an email update once ready.</p>
-            )}
-
-            {canRespond ? (
-              <div className="mt-6 space-y-3">
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => sendAction("accept")}
-                    className="rounded-lg bg-[#111a34] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1a2b52] disabled:opacity-60"
-                  >
-                    Accept Proposal
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => sendAction("reject")}
-                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
-                  >
-                    Reject
-                  </button>
-                </div>
-                <textarea
-                  value={negotiationMessage}
-                  onChange={(e) => setNegotiationMessage(e.target.value)}
-                  rows={3}
-                  placeholder="Write your negotiation request..."
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => sendAction("negotiate")}
-                  className="rounded-lg border border-[#111a34] px-4 py-2 text-sm font-semibold text-[#111a34] hover:bg-[#111a34] hover:text-white disabled:opacity-60"
-                >
-                  Send Negotiation
-                </button>
-              </div>
-            ) : null}
-
-            {canPay ? (
-              <div className="mt-6">
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={payNow}
-                  className="rounded-lg bg-[#d4af37] px-4 py-2 text-sm font-semibold text-[#111a34] hover:bg-[#e4c254] disabled:opacity-60"
-                >
-                  Pay with PayPal
-                </button>
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="mt-8 rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-[#1a2740] mb-4">Conversation</h2>
-          {requestData.messages.length === 0 ? (
-            <p className="text-sm text-gray-500">No messages yet.</p>
           ) : (
-            <div className="space-y-3">
-              {requestData.messages.map((message) => (
-                <div key={message.id} className="rounded-lg bg-gray-50 p-3 text-sm">
-                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    {message.authorRole === "owner" ? "Site Owner" : "You"}
-                  </p>
-                  <p className="whitespace-pre-wrap text-gray-700">{message.body}</p>
-                </div>
-              ))}
+            <div className="grid gap-3 sm:grid-cols-5">
+              {STATUS_STEPS.map((step, index) => {
+                const completed = index <= currentStepIndex;
+                return (
+                  <div key={step.key} className="flex items-center gap-2">
+                    <span
+                      className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${
+                        completed ? "bg-[#111a34] text-white" : "bg-gray-100 text-gray-500"
+                      }`}
+                    >
+                      {index + 1}
+                    </span>
+                    <p className={`text-xs font-medium ${completed ? "text-[#1a2740]" : "text-gray-500"}`}>{step.label}</p>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
 
-        <div className="mt-8 rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-[#1a2740] mb-4">Delivered Files</h2>
-          {!requestData.attachments || requestData.attachments.length === 0 ? (
-            <p className="text-sm text-gray-500">No delivered attachments yet.</p>
-          ) : (
-            <div className="space-y-3">
-              {requestData.attachments.map((attachment) => (
-                <a
-                  key={attachment.id}
-                  href={attachment.filePath}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="block rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-[#1a2740] hover:bg-gray-100"
-                >
-                  {attachment.fileName}
-                </a>
-              ))}
+        <div className="mt-8 grid gap-6 xl:grid-cols-[1.3fr_1fr]">
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+              <h2 className="mb-4 text-lg font-semibold text-[#1a2740]">Request Summary</h2>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-700"><strong>Name:</strong> {requestData.request.name}</p>
+                <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-700"><strong>Email:</strong> {requestData.request.email}</p>
+                <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-700"><strong>Service:</strong> {requestData.request.service}</p>
+                <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-700"><strong>Region:</strong> {requestData.request.region}</p>
+                <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-700"><strong>Timeline:</strong> {requestData.request.urgency || "Not specified"}</p>
+                <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-700"><strong>Budget:</strong> {requestData.request.budget || "Not specified"}</p>
+              </div>
+              <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Description</p>
+                <p className="whitespace-pre-wrap text-sm text-gray-700">{requestData.request.description}</p>
+              </div>
             </div>
-          )}
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+              <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-[#1a2740]">
+                <MessageSquare className="h-5 w-5" />
+                Conversation
+              </h2>
+              {requestData.messages.length === 0 ? (
+                <p className="text-sm text-gray-500">No messages yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {requestData.messages.map((message) => (
+                    <div
+                      key={message.id}
+                      className={`rounded-xl border px-4 py-3 text-sm ${
+                        message.authorRole === "owner"
+                          ? "border-blue-100 bg-blue-50/60"
+                          : "border-gray-200 bg-gray-50"
+                      }`}
+                    >
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                          {message.authorRole === "owner" ? "Site Owner" : "You"}
+                        </p>
+                        <p className="text-[11px] text-gray-400">{formatDate(message.createdAt)}</p>
+                      </div>
+                      <p className="whitespace-pre-wrap text-gray-700">{message.body}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+              <h2 className="mb-4 text-lg font-semibold text-[#1a2740]">Proposal & Actions</h2>
+              {requestData.proposal ? (
+                <div className="space-y-3">
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    <p className="text-xs uppercase tracking-wide text-gray-500">Proposed Price</p>
+                    <p className="mt-1 text-xl font-semibold text-[#111a34]">
+                      {requestData.proposal.currency} {requestData.proposal.price.toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+                    <p><strong>Timeline:</strong> {requestData.proposal.timeline || "TBD"}</p>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    <p className="mb-1 text-xs uppercase tracking-wide text-gray-500">Notes</p>
+                    <p className="whitespace-pre-wrap text-sm text-gray-700">
+                      {requestData.proposal.notes || "No notes provided."}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  <div className="flex items-center gap-2">
+                    <Clock3 className="h-4 w-4" />
+                    Waiting for proposal from site owner.
+                  </div>
+                </div>
+              )}
+
+              {canRespond ? (
+                <div className="mt-5 space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => sendAction("accept")}
+                      className="rounded-lg bg-[#111a34] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1a2b52] disabled:opacity-60"
+                    >
+                      Accept Proposal
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => sendAction("reject")}
+                      className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              {showNegotiationBox ? (
+                <div className="mt-4">
+                  <textarea
+                    value={negotiationMessage}
+                    onChange={(e) => setNegotiationMessage(e.target.value)}
+                    rows={3}
+                    placeholder="Request changes or negotiate the proposal..."
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => sendAction("negotiate")}
+                    className="mt-2 rounded-lg border border-[#111a34] px-4 py-2 text-sm font-semibold text-[#111a34] hover:bg-[#111a34] hover:text-white disabled:opacity-60"
+                  >
+                    Send Negotiation
+                  </button>
+                </div>
+              ) : null}
+
+              {canPay ? (
+                <div className="mt-5 rounded-lg border border-[#d4af37]/30 bg-[#d4af37]/10 p-3">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={payNow}
+                    className="inline-flex items-center gap-2 rounded-lg bg-[#d4af37] px-4 py-2 text-sm font-semibold text-[#111a34] hover:bg-[#e4c254] disabled:opacity-60"
+                  >
+                    <Wallet className="h-4 w-4" />
+                    Pay with PayPal
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+              <h2 className="mb-4 text-lg font-semibold text-[#1a2740]">Payment State</h2>
+              <div
+                className={`rounded-lg border px-3 py-2 text-sm ${
+                  paymentState === "payment completed"
+                    ? "border-green-200 bg-green-50 text-green-700"
+                    : paymentState === "failed payment"
+                      ? "border-red-200 bg-red-50 text-red-700"
+                      : "border-gray-200 bg-gray-50 text-gray-700"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {paymentState === "payment completed" ? <CheckCircle2 className="h-4 w-4" /> : null}
+                  {paymentState === "failed payment" ? <AlertCircle className="h-4 w-4" /> : null}
+                  {paymentState === "payment pending" ? <Clock3 className="h-4 w-4" /> : null}
+                  {paymentState === "waiting for price" ? <Clock3 className="h-4 w-4" /> : null}
+                  {paymentState === "price proposed" ? <FileText className="h-4 w-4" /> : null}
+                  <span className="font-medium capitalize">{paymentState}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+              <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-[#1a2740]">
+                <FileText className="h-5 w-5" />
+                Delivered Files
+              </h2>
+              {!requestData.attachments || requestData.attachments.length === 0 ? (
+                <p className="text-sm text-gray-500">No delivered attachments yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {requestData.attachments.map((attachment) => (
+                    <a
+                      key={attachment.id}
+                      href={attachment.filePath}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-[#1a2740] hover:bg-gray-100"
+                    >
+                      <span>{attachment.fileName}</span>
+                      <span className="text-xs font-medium text-blue-700">Open</span>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </section>
     </div>

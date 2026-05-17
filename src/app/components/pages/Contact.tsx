@@ -1,4 +1,4 @@
-import { Mail, Clock, Linkedin } from "lucide-react";
+import { Mail, Clock, Linkedin, Globe, MessageCircle, Phone } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 import { useSiteContent } from "../../content/siteContent";
@@ -7,8 +7,43 @@ export function Contact() {
   const { siteContent } = useSiteContent();
   const content = siteContent.pages.contact;
   const footer = siteContent.footer;
+  const fallbackChannels = [
+    {
+      label: content.emailLabel,
+      value: footer.social.email,
+      href: `mailto:${footer.social.email}`,
+      type: "email",
+      visible: true,
+    },
+    {
+      label: content.linkedinLabel,
+      value: content.linkedinCta,
+      href: footer.social.linkedinUrl,
+      type: "linkedin",
+      visible: true,
+    },
+  ];
+  const channels = Array.isArray(content.channels) && content.channels.length ? content.channels : fallbackChannels;
+  const visibleChannels = channels.filter((channel) => channel?.visible !== false);
   const [formData, setFormData] = useState({ name: "", email: "", subject: "", message: "" });
   const [submitted, setSubmitted] = useState(false);
+
+  const getChannelIcon = (type: string) => {
+    const normalized = String(type || "").trim().toLowerCase();
+    if (normalized === "email") {
+      return Mail;
+    }
+    if (normalized === "linkedin") {
+      return Linkedin;
+    }
+    if (normalized === "phone" || normalized === "whatsapp" || normalized === "telegram") {
+      return Phone;
+    }
+    if (normalized === "chat" || normalized === "message") {
+      return MessageCircle;
+    }
+    return Globe;
+  };
 
   const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); setSubmitted(true); };
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -45,21 +80,37 @@ export function Contact() {
         <div className="grid lg:grid-cols-3 gap-12">
           <div>
             <h2 className="text-lg font-bold text-[#1a2740] mb-6">{content.infoTitle}</h2>
+            <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              {content.channelsTitle || "Communication Channels"}
+            </p>
             <div className="space-y-6">
-              <div className="flex gap-4">
-                <Mail className="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="text-sm font-semibold text-[#1a2740] mb-0.5">{content.emailLabel}</h4>
-                  <a href={`mailto:${footer.social.email}`} className="text-sm text-gray-600 hover:text-blue-600 transition-colors">{footer.social.email}</a>
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <Linkedin className="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="text-sm font-semibold text-[#1a2740] mb-0.5">{content.linkedinLabel}</h4>
-                  <a href={footer.social.linkedinUrl} target="_blank" rel="noreferrer" className="text-sm text-gray-600 hover:text-blue-600 transition-colors">{content.linkedinCta}</a>
-                </div>
-              </div>
+              {visibleChannels.map((channel, index) => {
+                const Icon = getChannelIcon(channel.type || "");
+                const href = String(channel.href || "").trim();
+                const linkText = String(channel.value || href || "").trim();
+                const isExternal = href.startsWith("http://") || href.startsWith("https://");
+
+                return (
+                  <div className="flex gap-4" key={`${channel.label}-${channel.href}-${index}`}>
+                    <Icon className="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="text-sm font-semibold text-[#1a2740] mb-0.5">{channel.label}</h4>
+                      {href ? (
+                        <a
+                          href={href}
+                          target={isExternal ? "_blank" : undefined}
+                          rel={isExternal ? "noreferrer" : undefined}
+                          className="text-sm text-gray-600 hover:text-blue-600 transition-colors"
+                        >
+                          {linkText || href}
+                        </a>
+                      ) : (
+                        <p className="text-sm text-gray-600">{linkText}</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
               <div className="flex gap-4">
                 <Clock className="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" />
                 <div>

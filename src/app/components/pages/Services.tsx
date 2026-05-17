@@ -7,6 +7,8 @@ const CARD_ICONS = [BarChart3, FileText, TrendingUp, Globe2, Users, Database];
 export function Services() {
   const { siteContent } = useSiteContent();
   const content = siteContent.pages.services;
+  const showPricing = content.showPricing === true;
+  const hiddenPricingLabel = content.priceHiddenLabel || "Quote provided after your request";
 
   return (
     <div className="bg-white">
@@ -38,7 +40,7 @@ export function Services() {
                 </ul>
 
                 <div className="pt-4 border-t border-gray-100 flex justify-between items-center">
-                  <span className="text-sm font-medium text-[#1a2740]">{service.pricing}</span>
+                  <span className="text-sm font-medium text-[#1a2740]">{showPricing ? service.pricing : hiddenPricingLabel}</span>
                   <Link to="/request-analysis" className="text-sm font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1">
                     {content.cardCtaLabel} <ArrowRight className="w-3.5 h-3.5" />
                   </Link>

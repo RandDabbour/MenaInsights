@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { useEffect, useState } from "react";
 import { Menu, Search, X } from "lucide-react";
 import { useSiteContent } from "../../content/siteContent";
@@ -6,11 +6,14 @@ import { useSiteContent } from "../../content/siteContent";
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [brandVisible, setBrandVisible] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const location = useLocation();
+  const navigate = useNavigate();
   const { siteContent } = useSiteContent();
   const headerContent = siteContent.header;
 
-  const navigation = headerContent.navigation;
+  const navigation = headerContent.navigation.filter((item) => item?.visible !== false);
 
   const isActive = (href: string) => {
     if (href === "/") {
@@ -27,6 +30,18 @@ export function Header() {
 
     return () => cancelAnimationFrame(frame);
   }, []);
+
+  useEffect(() => {
+    setSearchOpen(false);
+    setSearchQuery("");
+  }, [location.pathname]);
+
+  const submitSearch = (event: React.FormEvent) => {
+    event.preventDefault();
+    const q = searchQuery.trim();
+    navigate(q ? `/insights?q=${encodeURIComponent(q)}` : "/insights");
+    setSearchOpen(false);
+  };
 
   const brandLines = [
     {
@@ -86,7 +101,7 @@ export function Header() {
             ))}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="relative flex items-center gap-2">
             <Link
               to="/request-analysis"
               className="hidden lg:inline-flex items-center justify-center rounded-lg bg-[#d4af37] px-4 py-2 text-[13px] font-semibold text-[#111a34] transition-colors hover:bg-[#e1be4f]"
@@ -95,6 +110,7 @@ export function Header() {
             </Link>
             <button
               type="button"
+              onClick={() => setSearchOpen((previous) => !previous)}
               aria-label={headerContent.searchAriaLabel}
               className="hidden h-11 w-11 items-center justify-center rounded-full border border-white/15 text-white/85 transition-colors hover:border-white/30 hover:text-white lg:inline-flex"
             >
@@ -106,6 +122,27 @@ export function Header() {
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
+
+            {searchOpen ? (
+              <form
+                onSubmit={submitSearch}
+                className="absolute right-0 top-[calc(100%+8px)] hidden w-[320px] items-center gap-2 rounded-xl border border-white/15 bg-[#0f1830] p-2 shadow-2xl lg:flex"
+              >
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search insights..."
+                  className="h-10 w-full rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white placeholder:text-white/55 focus:outline-none focus:ring-2 focus:ring-[#d4af37]/60"
+                />
+                <button
+                  type="submit"
+                  className="h-10 shrink-0 rounded-lg bg-[#d4af37] px-3 text-xs font-semibold text-[#111a34] hover:bg-[#e1be4f]"
+                >
+                  Go
+                </button>
+              </form>
+            ) : null}
           </div>
         </div>
       </nav>

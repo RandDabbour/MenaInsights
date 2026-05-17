@@ -1,13 +1,33 @@
 import { Search, ArrowRight } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { useSiteContent } from "../../content/siteContent";
 
 export function Insights() {
   const { siteContent } = useSiteContent();
   const insightsContent = siteContent.pages.insights;
+  const categoryOptions = insightsContent.categories.includes("All")
+    ? insightsContent.categories
+    : ["All", ...insightsContent.categories];
+  const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
+
+  useEffect(() => {
+    const q = String(searchParams.get("q") || "").trim();
+    if (q) {
+      setSearchQuery(q);
+      return;
+    }
+    setSearchQuery("");
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!categoryOptions.includes(selectedCategory)) {
+      setSelectedCategory("All");
+    }
+  }, [categoryOptions, selectedCategory]);
 
   const filteredInsights = insightsContent.items.filter((insight) => {
     const matchesCategory = selectedCategory === "All" || insight.category === selectedCategory;
@@ -43,7 +63,7 @@ export function Insights() {
               />
             </div>
             <div className="flex gap-2 overflow-x-auto pb-1 md:pb-0">
-              {insightsContent.categories.map((category) => (
+              {categoryOptions.map((category) => (
                 <button
                   key={category}
                   onClick={() => setSelectedCategory(category)}
@@ -87,9 +107,12 @@ export function Insights() {
                   {insight.title}
                 </h3>
                 <p className="text-sm text-gray-600 leading-relaxed mb-4">{insight.excerpt}</p>
-                <button className="text-sm font-medium text-blue-600 flex items-center gap-1 group-hover:gap-2 transition-all">
+                <Link
+                  to={insight.href?.trim() || "/contact"}
+                  className="inline-flex text-sm font-medium text-blue-600 items-center gap-1 group-hover:gap-2 transition-all"
+                >
                   {insightsContent.readMoreLabel} <ArrowRight className="w-3.5 h-3.5" />
-                </button>
+                </Link>
               </div>
             </article>
           ))}

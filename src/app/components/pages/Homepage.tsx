@@ -9,6 +9,7 @@ const SERVICE_ICONS = [BarChart3, FileText, TrendingUp, Globe2];
 export function Homepage() {
   const { siteContent } = useSiteContent();
   const homepage = siteContent.pages.homepage;
+  const showReportPrices = homepage.reportsIntro.showPrices !== false;
 
   const services = homepage.services.map((service, index) => ({
     ...service,
@@ -50,7 +51,7 @@ export function Homepage() {
                 <h3 className="text-[#1a2740] font-semibold mb-2 group-hover:text-blue-700 transition-colors">{service.title}</h3>
                 <p className="text-sm text-gray-500 leading-relaxed mb-4">{service.description}</p>
                 <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-100">
-                  <span className="text-sm font-semibold text-[#1a2740]">{service.price}</span>
+                  <span className="text-xs font-semibold uppercase tracking-wide text-[#1a2740]/75">Inquire for proposal</span>
                   <span className="text-xs font-semibold text-blue-600 flex items-center gap-1 group-hover:gap-2 transition-all">
                     {service.cta} <ArrowRight className="w-3 h-3" />
                   </span>
@@ -88,11 +89,13 @@ export function Homepage() {
                       {item.category}
                     </span>
                   </div>
-                  <div className="absolute top-3 right-3">
-                    <span className="px-2.5 py-1 bg-[#1a2740]/90 backdrop-blur-sm rounded-lg text-[11px] font-semibold text-white">
-                      {item.price}
-                    </span>
-                  </div>
+                  {showReportPrices ? (
+                    <div className="absolute top-3 right-3">
+                      <span className="px-2.5 py-1 bg-[#1a2740]/90 backdrop-blur-sm rounded-lg text-[11px] font-semibold text-white">
+                        {item.price}
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="p-6">
                   <h3 className="text-[#1a2740] font-semibold leading-snug mb-3 group-hover:text-blue-700 transition-colors">{item.title}</h3>

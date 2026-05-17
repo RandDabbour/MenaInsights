@@ -7,6 +7,8 @@ const BRIEF_ICONS = [Clock, Target, TrendingUp, FileText];
 export function StrategicBriefs() {
   const { siteContent } = useSiteContent();
   const content = siteContent.pages.strategicBriefs;
+  const showPricing = content.showPricing === true;
+  const hiddenPricingLabel = content.priceHiddenLabel || "Quoted per request";
 
   return (
     <div className="bg-white">
@@ -29,7 +31,7 @@ export function StrategicBriefs() {
                 <p className="text-sm text-gray-600 mb-5 leading-relaxed">{type.description}</p>
                 <div className="pt-4 border-t border-gray-100 space-y-1 text-sm">
                   <div className="flex justify-between"><span className="text-gray-500">Turnaround</span><span className="text-[#1a2740] font-medium">{type.turnaround}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500">Starting at</span><span className="text-[#1a2740] font-medium">{type.price}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">{showPricing ? "Starting at" : "Pricing"}</span><span className="text-[#1a2740] font-medium">{showPricing ? type.price : hiddenPricingLabel}</span></div>
                 </div>
               </div>
             );

@@ -6,6 +6,7 @@ import { useSiteContent } from "../../content/siteContent";
 export function RequestAnalysis() {
   const { siteContent } = useSiteContent();
   const content = siteContent.pages.requestAnalysis;
+  const showBudgetField = content.showBudgetField === true;
   const [formData, setFormData] = useState({
     name: "", email: "", organization: "", service: "", region: "", topic: "", urgency: "", description: "", budget: ""
   });
@@ -23,7 +24,10 @@ export function RequestAnalysis() {
       const response = await fetch("/api/requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          budget: showBudgetField ? formData.budget : "",
+        }),
       });
       const payload = await response.json();
       if (!response.ok) {
@@ -107,7 +111,15 @@ export function RequestAnalysis() {
               </div>
               <div className="md:col-span-2">
                 <label htmlFor="organization" className="block text-sm text-gray-700 mb-1.5">{content.labels.organization}</label>
-                <input type="text" id="organization" name="organization" value={formData.organization} onChange={handleChange} className={inputClass} />
+                <input
+                  type="text"
+                  id="organization"
+                  name="organization"
+                  value={formData.organization}
+                  onChange={handleChange}
+                  placeholder="Individual, freelancer, or organization name"
+                  className={inputClass}
+                />
               </div>
             </div>
           </div>
@@ -149,14 +161,16 @@ export function RequestAnalysis() {
                 <textarea id="description" name="description" required rows={5} placeholder={content.placeholders.description} value={formData.description} onChange={handleChange} className={inputClass + " resize-none"} />
               </div>
 
-              <div>
-                <label htmlFor="budget" className="block text-sm text-gray-700 mb-1.5">{content.labels.budget}</label>
-                <select id="budget" name="budget" value={formData.budget} onChange={handleChange} className={inputClass}>
-                  {content.budgetOptions.map((option) => (
-                    <option key={`${option.value}-${option.label}`} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </div>
+              {showBudgetField ? (
+                <div>
+                  <label htmlFor="budget" className="block text-sm text-gray-700 mb-1.5">{content.labels.budget}</label>
+                  <select id="budget" name="budget" value={formData.budget} onChange={handleChange} className={inputClass}>
+                    {content.budgetOptions.map((option) => (
+                      <option key={`${option.value}-${option.label}`} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
             </div>
           </div>
 

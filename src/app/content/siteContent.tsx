@@ -11,16 +11,16 @@ export const DEFAULT_SITE_CONTENT = {
   header: {
     brandLines: ["MIDDLE EAST", "MEDIA", "INSIGHTS"],
     navigation: [
-      { name: "Home", href: "/" },
-      { name: "Insights", href: "/insights" },
-      { name: "Media Landscapes", href: "/media-landscapes" },
-      { name: "Profiles", href: "/profiles" },
-      { name: "Strategic Briefs", href: "/strategic-briefs" },
-      { name: "About", href: "/about" },
-      { name: "Contact", href: "/contact" },
+      { name: "Home", href: "/", visible: true },
+      { name: "Insights", href: "/insights", visible: true },
+      { name: "Media Landscapes", href: "/media-landscapes", visible: true },
+      { name: "Profiles", href: "/profiles", visible: true },
+      { name: "Strategic Briefs", href: "/strategic-briefs", visible: true },
+      { name: "About", href: "/about", visible: true },
+      { name: "Contact", href: "/contact", visible: true },
     ],
     ctaText: "Request a Product",
-    searchAriaLabel: "Search",
+    searchAriaLabel: "Search insights",
   },
   footer: {
     brandShort: "ME",
@@ -28,23 +28,23 @@ export const DEFAULT_SITE_CONTENT = {
     description: "Independent media analysis and strategic intelligence for the Middle East & North Africa region.",
     servicesTitle: "Services",
     servicesLinks: [
-      { label: "Media Analysis", href: "/services" },
-      { label: "Strategic Briefs", href: "/services" },
-      { label: "Media Monitoring", href: "/services" },
-      { label: "Landscape Reports", href: "/services" },
+      { label: "Media Analysis", href: "/services", visible: true },
+      { label: "Strategic Briefs", href: "/services", visible: true },
+      { label: "Media Monitoring", href: "/services", visible: true },
+      { label: "Landscape Reports", href: "/services", visible: true },
     ],
     resourcesTitle: "Resources",
     resourcesLinks: [
-      { label: "Insights", href: "/insights" },
-      { label: "Media Landscapes", href: "/media-landscapes" },
-      { label: "Profiles", href: "/profiles" },
-      { label: "Strategic Briefs", href: "/strategic-briefs" },
+      { label: "Insights", href: "/insights", visible: true },
+      { label: "Media Landscapes", href: "/media-landscapes", visible: true },
+      { label: "Profiles", href: "/profiles", visible: true },
+      { label: "Strategic Briefs", href: "/strategic-briefs", visible: true },
     ],
     connectTitle: "Connect",
     connectLinks: [
-      { label: "About", href: "/about" },
-      { label: "Contact", href: "/contact" },
-      { label: "Request a Product", href: "/request-analysis" },
+      { label: "About", href: "/about", visible: true },
+      { label: "Contact", href: "/contact", visible: true },
+      { label: "Request a Product", href: "/request-analysis", visible: true },
     ],
     social: {
       linkedinUrl: "https://www.linkedin.com/",
@@ -96,7 +96,8 @@ export const DEFAULT_SITE_CONTENT = {
         title: "Ready-made intelligence",
         description:
           "Pre-produced reports available for immediate purchase. Need something custom? Request a tailored analysis instead.",
-        viewAllLabel: "View all reports",
+        viewAllLabel: "Explore services",
+        showPrices: true,
       },
       reports: [
         {
@@ -161,7 +162,7 @@ export const DEFAULT_SITE_CONTENT = {
           "Tell me what you need — whether it's a one-off brief, a landscape report, or ongoing monitoring. I'll scope it and send you a quote within 24 hours.",
         note: "No commitment required — you only pay once you're happy with the scope.",
         primaryLabel: "Request a Quote",
-        secondaryLabel: "View Pricing",
+        secondaryLabel: "Explore Services",
       },
     },
     about: {
@@ -247,6 +248,7 @@ export const DEFAULT_SITE_CONTENT = {
           category: "GCC",
           readTime: "12 min read",
           image: RIYADH_IMG,
+          href: "/request-analysis",
         },
         {
           title: "Mapping Influence Networks Across Levant Broadcasting",
@@ -256,6 +258,7 @@ export const DEFAULT_SITE_CONTENT = {
           category: "Levant",
           readTime: "15 min read",
           image: BEIRUT_IMG,
+          href: "/request-analysis",
         },
         {
           title: "Egypt's Evolving Digital Media Regulation Landscape",
@@ -265,6 +268,7 @@ export const DEFAULT_SITE_CONTENT = {
           category: "North Africa",
           readTime: "10 min read",
           image: CAIRO_IMG,
+          href: "/request-analysis",
         },
         {
           title: "Turkey's Press Freedom Trajectory: A 2026 Assessment",
@@ -274,6 +278,7 @@ export const DEFAULT_SITE_CONTENT = {
           category: "Turkey",
           readTime: "14 min read",
           image: ISTANBUL_IMG,
+          href: "/request-analysis",
         },
         {
           title: "UAE's Soft Power Strategy Through Media Investment",
@@ -283,6 +288,7 @@ export const DEFAULT_SITE_CONTENT = {
           category: "GCC",
           readTime: "16 min read",
           image: DUBAI_IMG,
+          href: "/request-analysis",
         },
         {
           title: "Arabic-Language Digital Influence Operations: Patterns and Detection",
@@ -292,6 +298,7 @@ export const DEFAULT_SITE_CONTENT = {
           category: "Digital Media",
           readTime: "18 min read",
           image: PRESS_IMG,
+          href: "/request-analysis",
         },
       ],
       readMoreLabel: "Read more",
@@ -360,13 +367,13 @@ export const DEFAULT_SITE_CONTENT = {
       requestCard: {
         title: "Request a Custom Report",
         description:
-          "Need a landscape assessment for a specific country or sub-region? I'll scope it to your needs and deliver within 1-2 weeks.",
+          "Need a landscape assessment for a specific country or sub-region? Send your request and you will receive a tailored proposal and delivery timeline.",
         pricingRows: [
-          { label: "Single Country", value: "From $5,000" },
-          { label: "Sub-Region (e.g. GCC)", value: "From $10,000" },
-          { label: "Multi-Market", value: "Custom" },
+          { label: "Pricing", value: "Quote provided after scoping" },
+          { label: "Timeline", value: "Based on scope and priority" },
+          { label: "Delivery", value: "Report PDF + optional briefing call" },
         ],
-        cta: "Request Report",
+        cta: "Contact for Proposal",
       },
     },
     profiles: {
@@ -433,11 +440,11 @@ export const DEFAULT_SITE_CONTENT = {
         description:
           "Whether it's a media organization, an individual, or a digital influence network — I can put together a comprehensive profile based on multi-source research and native-language analysis.",
         pricingRows: [
-          { label: "Organization Profile", value: "From $3,000" },
-          { label: "Individual Profile", value: "From $2,000" },
-          { label: "Digital Actor / Network", value: "From $2,500" },
+          { label: "Pricing", value: "Quote provided after request review" },
+          { label: "Timeline", value: "Defined after scope confirmation" },
+          { label: "Format", value: "Written profile + optional briefing call" },
         ],
-        ctaLabel: "Request a Profile",
+        ctaLabel: "Contact for Proposal",
       },
       includes: {
         title: "What's included",
@@ -456,6 +463,8 @@ export const DEFAULT_SITE_CONTENT = {
       title: "Services",
       description:
         "Tailored intelligence solutions for organizations and individuals navigating MENA media environments. Every engagement is scoped to your specific needs.",
+      showPricing: false,
+      priceHiddenLabel: "Quote provided after your request",
       cards: [
         {
           title: "Media Analysis",
@@ -522,6 +531,8 @@ export const DEFAULT_SITE_CONTENT = {
       title: "Strategic Briefs",
       description:
         "Targeted intelligence reports built for decision-makers. Each brief answers a specific question about MENA media — clearly, concisely, and on deadline.",
+      showPricing: false,
+      priceHiddenLabel: "Quoted per request",
       briefTypes: [
         { title: "Rapid Response", description: "Fast-turnaround intelligence for time-sensitive situations or breaking developments in the region.", turnaround: "24-48 hours", price: "From $2,000" },
         { title: "Focused Analysis", description: "Deep-dive on a specific topic, actor, or market segment relevant to your work.", turnaround: "3-5 days", price: "From $2,500" },
@@ -569,6 +580,23 @@ export const DEFAULT_SITE_CONTENT = {
       emailLabel: "Email",
       linkedinLabel: "LinkedIn",
       linkedinCta: "Connect on LinkedIn",
+      channelsTitle: "Communication Channels",
+      channels: [
+        {
+          label: "Email",
+          value: "hello@memi.me",
+          href: "mailto:hello@memi.me",
+          type: "email",
+          visible: true,
+        },
+        {
+          label: "LinkedIn",
+          value: "Connect on LinkedIn",
+          href: "https://www.linkedin.com/",
+          type: "linkedin",
+          visible: true,
+        },
+      ],
       responseLabel: "Response Time",
       responseText: "Within 24 hours on business days",
       sidebarCard: {
@@ -599,7 +627,7 @@ export const DEFAULT_SITE_CONTENT = {
     requestAnalysis: {
       submittedTitle: "Request received",
       submittedDescription:
-        "Thanks for reaching out. The request owner can now send you a proposal by email, and you can track everything in your request portal.",
+        "Thanks for reaching out. You will receive an email with your request portal link so you can return anytime.",
       openPortalLabel: "Open Request Portal",
       nextTitle: "What happens next:",
       nextSteps: [
@@ -619,14 +647,15 @@ export const DEFAULT_SITE_CONTENT = {
       labels: {
         fullName: "Full Name *",
         email: "Email *",
-        organization: "Organization",
+        organization: "Organization (if applicable)",
         service: "Service Type *",
         timeline: "Timeline *",
         region: "Region / Country of Interest *",
         topic: "Topic / Focus *",
         description: "Description *",
-        budget: "Budget Range",
+        budget: "Budget Range (optional)",
       },
+      showBudgetField: false,
       placeholders: {
         region: "e.g., Saudi Arabia, Levant region, GCC",
         topic: "e.g., media ownership in Qatar, digital influence in Iraq",

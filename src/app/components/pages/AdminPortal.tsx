@@ -68,6 +68,41 @@ type ContentState = {
   updatedAt?: string;
 };
 
+type SelectOption = {
+  label: string;
+  value: string;
+};
+
+type VisibleLinkItem = {
+  label: string;
+  href: string;
+  visible: boolean;
+};
+
+type VisibleNavItem = {
+  name: string;
+  href: string;
+  visible: boolean;
+};
+
+type TitleDescItem = {
+  title: string;
+  desc: string;
+};
+
+type LabelValueItem = {
+  label: string;
+  value: string;
+};
+
+type ContactChannelItem = {
+  label: string;
+  value: string;
+  href: string;
+  type: string;
+  visible: boolean;
+};
+
 type FlatField = {
   path: string;
   value: string;
@@ -375,7 +410,7 @@ function getByPath(obj: unknown, path: string): unknown {
   return cursor;
 }
 
-function setByPath<T>(obj: T, path: string, value: string): T {
+function setByPath<T>(obj: T, path: string, value: unknown): T {
   const next = cloneDeep(obj);
   const segments = parsePath(path);
   if (!segments.length) {
@@ -420,6 +455,78 @@ function setByPath<T>(obj: T, path: string, value: string): T {
   }
 
   return next;
+}
+
+function normalizeSelectOption(value: unknown): SelectOption {
+  if (!value || typeof value !== "object") {
+    return { label: "", value: "" };
+  }
+
+  const option = value as { label?: unknown; value?: unknown };
+  return {
+    label: String(option.label ?? "").slice(0, 120),
+    value: String(option.value ?? "").slice(0, 120),
+  };
+}
+
+function normalizeVisibleLinkItem(value: unknown): VisibleLinkItem {
+  if (!value || typeof value !== "object") {
+    return { label: "", href: "", visible: true };
+  }
+  const item = value as { label?: unknown; href?: unknown; visible?: unknown };
+  return {
+    label: String(item.label ?? "").slice(0, 120),
+    href: String(item.href ?? "").slice(0, 320),
+    visible: item.visible !== false,
+  };
+}
+
+function normalizeVisibleNavItem(value: unknown): VisibleNavItem {
+  if (!value || typeof value !== "object") {
+    return { name: "", href: "", visible: true };
+  }
+  const item = value as { name?: unknown; href?: unknown; visible?: unknown };
+  return {
+    name: String(item.name ?? "").slice(0, 120),
+    href: String(item.href ?? "").slice(0, 320),
+    visible: item.visible !== false,
+  };
+}
+
+function normalizeTitleDescItem(value: unknown): TitleDescItem {
+  if (!value || typeof value !== "object") {
+    return { title: "", desc: "" };
+  }
+  const item = value as { title?: unknown; desc?: unknown };
+  return {
+    title: String(item.title ?? "").slice(0, 160),
+    desc: String(item.desc ?? "").slice(0, 600),
+  };
+}
+
+function normalizeLabelValueItem(value: unknown): LabelValueItem {
+  if (!value || typeof value !== "object") {
+    return { label: "", value: "" };
+  }
+  const item = value as { label?: unknown; value?: unknown };
+  return {
+    label: String(item.label ?? "").slice(0, 160),
+    value: String(item.value ?? "").slice(0, 320),
+  };
+}
+
+function normalizeContactChannelItem(value: unknown): ContactChannelItem {
+  if (!value || typeof value !== "object") {
+    return { label: "", value: "", href: "", type: "other", visible: true };
+  }
+  const item = value as { label?: unknown; value?: unknown; href?: unknown; type?: unknown; visible?: unknown };
+  return {
+    label: String(item.label ?? "").slice(0, 120),
+    value: String(item.value ?? "").slice(0, 200),
+    href: String(item.href ?? "").slice(0, 320),
+    type: String(item.type ?? "other").slice(0, 40) || "other",
+    visible: item.visible !== false,
+  };
 }
 
 function flattenStringFields(value: unknown, prefix = ""): FlatField[] {
@@ -769,7 +876,7 @@ export function AdminPortal() {
       setApiError("");
       const path = await uploadImageFile(file, "/api/admin/uploads/site-image");
       if (path) {
-        updateByPath("homepage.heroImage", path);
+        updateDraftField("homepage.heroImage", path);
         setUploadNotice(`Site image uploaded: ${path}`);
       }
     } catch (err) {
@@ -896,6 +1003,10 @@ export function AdminPortal() {
   }, [contentDraft, contentState]);
 
   const changedPathSet = useMemo(() => new Set(changedFields.map((field) => field.path)), [changedFields]);
+  const hasNonStringDraftChanges = useMemo(
+    () => JSON.stringify(contentDraft) !== JSON.stringify(contentState),
+    [contentDraft, contentState],
+  );
 
   const activeKindCounts = useMemo(() => {
     const counts: Record<"all" | FieldKind, number> = {
@@ -919,6 +1030,145 @@ export function AdminPortal() {
     }
     return activeSectionFields.filter((field) => field.kind === activeFieldKind);
   }, [activeFieldKind, activeSectionFields]);
+
+  const requestFormServiceOptions = useMemo(() => {
+    const raw = getByPath(contentDraft, "siteContent.pages.requestAnalysis.serviceOptions");
+    if (!Array.isArray(raw)) {
+      return [] as SelectOption[];
+    }
+    return raw.map((entry) => normalizeSelectOption(entry));
+  }, [contentDraft]);
+
+  const requestFormTimelineOptions = useMemo(() => {
+    const raw = getByPath(contentDraft, "siteContent.pages.requestAnalysis.urgencyOptions");
+    if (!Array.isArray(raw)) {
+      return [] as SelectOption[];
+    }
+    return raw.map((entry) => normalizeSelectOption(entry));
+  }, [contentDraft]);
+
+  const requestFormBudgetOptions = useMemo(() => {
+    const raw = getByPath(contentDraft, "siteContent.pages.requestAnalysis.budgetOptions");
+    if (!Array.isArray(raw)) {
+      return [] as SelectOption[];
+    }
+    return raw.map((entry) => normalizeSelectOption(entry));
+  }, [contentDraft]);
+
+  const showHomepageReportPrices = Boolean(getByPath(contentDraft, "siteContent.pages.homepage.reportsIntro.showPrices"));
+  const showServicesPricing = Boolean(getByPath(contentDraft, "siteContent.pages.services.showPricing"));
+  const showStrategicBriefsPricing = Boolean(getByPath(contentDraft, "siteContent.pages.strategicBriefs.showPricing"));
+  const showBudgetField = Boolean(getByPath(contentDraft, "siteContent.pages.requestAnalysis.showBudgetField"));
+  const requestFormOptionEditors = [
+    {
+      title: "Service Types",
+      description: "Shown in the request form service dropdown.",
+      path: "siteContent.pages.requestAnalysis.serviceOptions",
+      options: requestFormServiceOptions,
+    },
+    {
+      title: "Durations / Timeline Options",
+      description: "Shown in the request form timeline dropdown.",
+      path: "siteContent.pages.requestAnalysis.urgencyOptions",
+      options: requestFormTimelineOptions,
+    },
+    {
+      title: "Budget Range Options",
+      description: "Shown only when budget field is enabled.",
+      path: "siteContent.pages.requestAnalysis.budgetOptions",
+      options: requestFormBudgetOptions,
+    },
+  ] as const;
+
+  const headerNavigationItems = useMemo(() => {
+    const raw = getByPath(contentDraft, "siteContent.header.navigation");
+    if (!Array.isArray(raw)) {
+      return [] as VisibleNavItem[];
+    }
+    return raw.map((entry) => normalizeVisibleNavItem(entry));
+  }, [contentDraft]);
+
+  const footerServicesLinks = useMemo(() => {
+    const raw = getByPath(contentDraft, "siteContent.footer.servicesLinks");
+    if (!Array.isArray(raw)) {
+      return [] as VisibleLinkItem[];
+    }
+    return raw.map((entry) => normalizeVisibleLinkItem(entry));
+  }, [contentDraft]);
+
+  const footerResourcesLinks = useMemo(() => {
+    const raw = getByPath(contentDraft, "siteContent.footer.resourcesLinks");
+    if (!Array.isArray(raw)) {
+      return [] as VisibleLinkItem[];
+    }
+    return raw.map((entry) => normalizeVisibleLinkItem(entry));
+  }, [contentDraft]);
+
+  const footerConnectLinks = useMemo(() => {
+    const raw = getByPath(contentDraft, "siteContent.footer.connectLinks");
+    if (!Array.isArray(raw)) {
+      return [] as VisibleLinkItem[];
+    }
+    return raw.map((entry) => normalizeVisibleLinkItem(entry));
+  }, [contentDraft]);
+
+  const insightsCategories = useMemo(() => {
+    const raw = getByPath(contentDraft, "siteContent.pages.insights.categories");
+    if (!Array.isArray(raw)) {
+      return [] as string[];
+    }
+    return raw.map((entry) => String(entry ?? "").slice(0, 100));
+  }, [contentDraft]);
+
+  const mediaLandscapeReportItems = useMemo(() => {
+    const raw = getByPath(contentDraft, "siteContent.pages.mediaLandscapes.reportContents.items");
+    if (!Array.isArray(raw)) {
+      return [] as TitleDescItem[];
+    }
+    return raw.map((entry) => normalizeTitleDescItem(entry));
+  }, [contentDraft]);
+
+  const mediaLandscapeRequestRows = useMemo(() => {
+    const raw = getByPath(contentDraft, "siteContent.pages.mediaLandscapes.requestCard.pricingRows");
+    if (!Array.isArray(raw)) {
+      return [] as LabelValueItem[];
+    }
+    return raw.map((entry) => normalizeLabelValueItem(entry));
+  }, [contentDraft]);
+
+  const profileCtaRows = useMemo(() => {
+    const raw = getByPath(contentDraft, "siteContent.pages.profiles.cta.pricingRows");
+    if (!Array.isArray(raw)) {
+      return [] as LabelValueItem[];
+    }
+    return raw.map((entry) => normalizeLabelValueItem(entry));
+  }, [contentDraft]);
+
+  const contactChannels = useMemo(() => {
+    const raw = getByPath(contentDraft, "siteContent.pages.contact.channels");
+    if (!Array.isArray(raw)) {
+      return [] as ContactChannelItem[];
+    }
+    return raw.map((entry) => normalizeContactChannelItem(entry));
+  }, [contentDraft]);
+
+  const footerLinkEditors = [
+    {
+      title: "Footer Services Links",
+      path: "siteContent.footer.servicesLinks",
+      items: footerServicesLinks,
+    },
+    {
+      title: "Footer Resources Links",
+      path: "siteContent.footer.resourcesLinks",
+      items: footerResourcesLinks,
+    },
+    {
+      title: "Footer Connect Links",
+      path: "siteContent.footer.connectLinks",
+      items: footerConnectLinks,
+    },
+  ] as const;
 
   useEffect(() => {
     if ((sectionedDraftFields[activeContentSection] || []).length > 0) {
@@ -976,18 +1226,104 @@ export function AdminPortal() {
     }
   };
 
-  const updateDraftField = (path: string, value: string) => {
+  const updateDraftValue = (path: string, value: unknown) => {
     setContentDraft((previous) => {
       const nextDraft = setByPath(previous, path, value);
-      if (path === "homepage.heroImage" || path === "siteContent.pages.homepage.heroImage") {
+      if (typeof value === "string" && (path === "homepage.heroImage" || path === "siteContent.pages.homepage.heroImage")) {
         const withLegacy = setByPath(nextDraft, "homepage.heroImage", value);
         return setByPath(withLegacy, "siteContent.pages.homepage.heroImage", value);
       }
-      if (path === "homepage.heroAlt" || path === "siteContent.pages.homepage.heroAlt") {
+      if (typeof value === "string" && (path === "homepage.heroAlt" || path === "siteContent.pages.homepage.heroAlt")) {
         const withLegacy = setByPath(nextDraft, "homepage.heroAlt", value);
         return setByPath(withLegacy, "siteContent.pages.homepage.heroAlt", value);
       }
       return nextDraft;
+    });
+  };
+
+  const updateDraftField = (path: string, value: string) => {
+    updateDraftValue(path, value);
+  };
+
+  const updateOptionList = (path: string, updater: (options: SelectOption[]) => SelectOption[]) => {
+    setContentDraft((previous) => {
+      const currentRaw = getByPath(previous, path);
+      const currentOptions = Array.isArray(currentRaw) ? currentRaw.map((entry) => normalizeSelectOption(entry)) : [];
+      const nextOptions = updater(currentOptions);
+      return setByPath(previous, path, nextOptions);
+    });
+  };
+
+  const setOptionFieldValue = (path: string, index: number, key: "label" | "value", value: string) => {
+    updateOptionList(path, (options) =>
+      options.map((option, optionIndex) => (optionIndex === index ? { ...option, [key]: value.slice(0, 120) } : option)),
+    );
+  };
+
+  const addOptionToList = (path: string) => {
+    updateOptionList(path, (options) => [...options, { label: "New option", value: "" }]);
+  };
+
+  const removeOptionFromList = (path: string, index: number) => {
+    updateOptionList(path, (options) => {
+      if (options.length <= 1) {
+        return options;
+      }
+      return options.filter((_, optionIndex) => optionIndex !== index);
+    });
+  };
+
+  const updateNavList = (path: string, updater: (items: VisibleNavItem[]) => VisibleNavItem[]) => {
+    setContentDraft((previous) => {
+      const currentRaw = getByPath(previous, path);
+      const currentItems = Array.isArray(currentRaw) ? currentRaw.map((entry) => normalizeVisibleNavItem(entry)) : [];
+      const nextItems = updater(currentItems);
+      return setByPath(previous, path, nextItems);
+    });
+  };
+
+  const updateLinkList = (path: string, updater: (items: VisibleLinkItem[]) => VisibleLinkItem[]) => {
+    setContentDraft((previous) => {
+      const currentRaw = getByPath(previous, path);
+      const currentItems = Array.isArray(currentRaw) ? currentRaw.map((entry) => normalizeVisibleLinkItem(entry)) : [];
+      const nextItems = updater(currentItems);
+      return setByPath(previous, path, nextItems);
+    });
+  };
+
+  const updateStringList = (path: string, updater: (items: string[]) => string[]) => {
+    setContentDraft((previous) => {
+      const currentRaw = getByPath(previous, path);
+      const currentItems = Array.isArray(currentRaw) ? currentRaw.map((entry) => String(entry ?? "").slice(0, 100)) : [];
+      const nextItems = updater(currentItems);
+      return setByPath(previous, path, nextItems);
+    });
+  };
+
+  const updateTitleDescList = (path: string, updater: (items: TitleDescItem[]) => TitleDescItem[]) => {
+    setContentDraft((previous) => {
+      const currentRaw = getByPath(previous, path);
+      const currentItems = Array.isArray(currentRaw) ? currentRaw.map((entry) => normalizeTitleDescItem(entry)) : [];
+      const nextItems = updater(currentItems);
+      return setByPath(previous, path, nextItems);
+    });
+  };
+
+  const updateLabelValueList = (path: string, updater: (items: LabelValueItem[]) => LabelValueItem[]) => {
+    setContentDraft((previous) => {
+      const currentRaw = getByPath(previous, path);
+      const currentItems = Array.isArray(currentRaw) ? currentRaw.map((entry) => normalizeLabelValueItem(entry)) : [];
+      const nextItems = updater(currentItems);
+      return setByPath(previous, path, nextItems);
+    });
+  };
+
+  const updateContactChannelsList = (path: string, updater: (items: ContactChannelItem[]) => ContactChannelItem[]) => {
+    setContentDraft((previous) => {
+      const currentRaw = getByPath(previous, path);
+      const currentItems = Array.isArray(currentRaw) ? currentRaw.map((entry) => normalizeContactChannelItem(entry)) : [];
+      const nextItems = updater(currentItems);
+      return setByPath(previous, path, nextItems);
     });
   };
 
@@ -1322,7 +1658,9 @@ export function AdminPortal() {
                 </div>
                 <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#1a2740]">
                   <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-                  {changedFields.length} unsaved change{changedFields.length === 1 ? "" : "s"}
+                  {hasNonStringDraftChanges
+                    ? `${changedFields.length > 0 ? changedFields.length : "Some"} unsaved change${changedFields.length === 1 ? "" : "s"}`
+                    : "No unsaved changes"}
                 </span>
               </div>
             </div>
@@ -1372,7 +1710,7 @@ export function AdminPortal() {
                       </span>
                     </div>
                     <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-white/80">
-                      {contentDraft.siteContent.header.navigation.map((item) => (
+                      {contentDraft.siteContent.header.navigation.filter((item) => item?.visible !== false).map((item) => (
                         <span key={`${item.name}-${item.href}`}>{item.name}</span>
                       ))}
                     </div>
@@ -1399,11 +1737,11 @@ export function AdminPortal() {
                 <div className="grid gap-3 bg-[#111a34] px-4 py-4 text-[11px] text-white/80 sm:grid-cols-3">
                   <div>
                     <p className="mb-1 text-white">{contentDraft.siteContent.footer.servicesTitle}</p>
-                    <p>{contentDraft.siteContent.footer.servicesLinks[0]?.label || ""}</p>
+                    <p>{contentDraft.siteContent.footer.servicesLinks.find((item) => item?.visible !== false)?.label || ""}</p>
                   </div>
                   <div>
                     <p className="mb-1 text-white">{contentDraft.siteContent.footer.resourcesTitle}</p>
-                    <p>{contentDraft.siteContent.footer.resourcesLinks[0]?.label || ""}</p>
+                    <p>{contentDraft.siteContent.footer.resourcesLinks.find((item) => item?.visible !== false)?.label || ""}</p>
                   </div>
                   <div>
                     <p className="mb-1 text-white">{contentDraft.siteContent.footer.connectTitle}</p>
@@ -1417,7 +1755,11 @@ export function AdminPortal() {
               <div className="space-y-3">
                 <h3 className="text-sm font-semibold text-[#1a2740]">Changed fields ({changedFields.length})</h3>
                 {!changedFields.length ? (
-                  <p className="text-sm text-gray-500">No changes to save.</p>
+                  <p className="text-sm text-gray-500">
+                    {hasNonStringDraftChanges
+                      ? "Non-text settings changed (toggles, visibility, or list structure). Publish to save."
+                      : "No changes to save."}
+                  </p>
                 ) : (
                   changedFields.map((field) => (
                     <div key={field.path} className="rounded-lg border border-gray-200 p-3 text-sm">
@@ -1479,6 +1821,614 @@ export function AdminPortal() {
                         </div>
                       );
                     })}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 p-4">
+                  <h3 className="text-sm font-semibold text-[#1a2740]">Request Form & Pricing Controls</h3>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Control whether prices and budget fields are shown, and manage request form dropdown options.
+                  </p>
+
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3">
+                      <input
+                        type="checkbox"
+                        checked={showHomepageReportPrices}
+                        onChange={(event) => updateDraftValue("siteContent.pages.homepage.reportsIntro.showPrices", event.target.checked)}
+                        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#111a34] focus:ring-[#111a34]"
+                      />
+                      <span>
+                        <span className="block text-sm font-semibold text-[#1a2740]">Show prices in Homepage reports</span>
+                        <span className="block text-xs text-gray-500">Toggle visible prices in the “Available Reports” cards.</span>
+                      </span>
+                    </label>
+
+                    <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3">
+                      <input
+                        type="checkbox"
+                        checked={showServicesPricing}
+                        onChange={(event) => updateDraftValue("siteContent.pages.services.showPricing", event.target.checked)}
+                        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#111a34] focus:ring-[#111a34]"
+                      />
+                      <span>
+                        <span className="block text-sm font-semibold text-[#1a2740]">Show prices in Services page</span>
+                        <span className="block text-xs text-gray-500">If off, visitors see a quote prompt instead of prices.</span>
+                      </span>
+                    </label>
+
+                    <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3">
+                      <input
+                        type="checkbox"
+                        checked={showStrategicBriefsPricing}
+                        onChange={(event) => updateDraftValue("siteContent.pages.strategicBriefs.showPricing", event.target.checked)}
+                        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#111a34] focus:ring-[#111a34]"
+                      />
+                      <span>
+                        <span className="block text-sm font-semibold text-[#1a2740]">Show prices in Strategic Briefs page</span>
+                        <span className="block text-xs text-gray-500">If off, visitors see “Quoted per request” style messaging.</span>
+                      </span>
+                    </label>
+
+                    <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3">
+                      <input
+                        type="checkbox"
+                        checked={showBudgetField}
+                        onChange={(event) => updateDraftValue("siteContent.pages.requestAnalysis.showBudgetField", event.target.checked)}
+                        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#111a34] focus:ring-[#111a34]"
+                      />
+                      <span>
+                        <span className="block text-sm font-semibold text-[#1a2740]">Show budget field in request form</span>
+                        <span className="block text-xs text-gray-500">Turn off to collect requests first, then send custom offers.</span>
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="mt-5 space-y-4">
+                    {requestFormOptionEditors.map((editor) => (
+                      <div key={editor.path} className="rounded-lg border border-gray-200 p-3">
+                        <div className="mb-3">
+                          <h4 className="text-sm font-semibold text-[#1a2740]">{editor.title}</h4>
+                          <p className="text-xs text-gray-500">{editor.description}</p>
+                        </div>
+
+                        <div className="space-y-2">
+                          {editor.options.map((option, index) => (
+                            <div key={`${editor.path}-${index}`} className="grid gap-2 rounded-md border border-gray-100 bg-gray-50 p-2 md:grid-cols-[1fr_1fr_auto]">
+                              <input
+                                type="text"
+                                value={option.label}
+                                onChange={(event) => setOptionFieldValue(editor.path, index, "label", event.target.value)}
+                                placeholder="Option label"
+                                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                              />
+                              <input
+                                type="text"
+                                value={option.value}
+                                onChange={(event) => setOptionFieldValue(editor.path, index, "value", event.target.value)}
+                                placeholder="Option value"
+                                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                              />
+                              <button
+                                type="button"
+                                disabled={editor.options.length <= 1}
+                                onClick={() => removeOptionFromList(editor.path, index)}
+                                className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => addOptionToList(editor.path)}
+                          className="mt-3 rounded-lg border border-[#111a34] px-3 py-1.5 text-xs font-semibold text-[#111a34] hover:bg-[#111a34] hover:text-white"
+                        >
+                          Add Option
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 p-4">
+                  <h3 className="text-sm font-semibold text-[#1a2740]">Header & Footer Navigation Controls</h3>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Manage menu/footer links and toggle each item visible or hidden.
+                  </p>
+
+                  <div className="mt-4 rounded-lg border border-gray-200 p-3">
+                    <h4 className="text-sm font-semibold text-[#1a2740]">Header Menu Items</h4>
+                    <div className="mt-3 space-y-2">
+                      {headerNavigationItems.map((item, index) => (
+                        <div key={`header-nav-${index}`} className="grid gap-2 rounded-md border border-gray-100 bg-gray-50 p-2 md:grid-cols-[1fr_1fr_auto_auto]">
+                          <input
+                            type="text"
+                            value={item.name}
+                            onChange={(event) =>
+                              updateNavList("siteContent.header.navigation", (items) =>
+                                items.map((entry, entryIndex) =>
+                                  entryIndex === index ? { ...entry, name: event.target.value.slice(0, 120) } : entry,
+                                ),
+                              )
+                            }
+                            placeholder="Menu label"
+                            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                          />
+                          <input
+                            type="text"
+                            value={item.href}
+                            onChange={(event) =>
+                              updateNavList("siteContent.header.navigation", (items) =>
+                                items.map((entry, entryIndex) =>
+                                  entryIndex === index ? { ...entry, href: event.target.value.slice(0, 320) } : entry,
+                                ),
+                              )
+                            }
+                            placeholder="/route-or-url"
+                            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                          />
+                          <label className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700">
+                            <input
+                              type="checkbox"
+                              checked={item.visible}
+                              onChange={(event) =>
+                                updateNavList("siteContent.header.navigation", (items) =>
+                                  items.map((entry, entryIndex) =>
+                                    entryIndex === index ? { ...entry, visible: event.target.checked } : entry,
+                                  ),
+                                )
+                              }
+                              className="h-4 w-4 rounded border-gray-300"
+                            />
+                            Show
+                          </label>
+                          <button
+                            type="button"
+                            disabled={headerNavigationItems.length <= 1}
+                            onClick={() =>
+                              updateNavList("siteContent.header.navigation", (items) =>
+                                items.length <= 1 ? items : items.filter((_, entryIndex) => entryIndex !== index),
+                              )
+                            }
+                            className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateNavList("siteContent.header.navigation", (items) => [
+                          ...items,
+                          { name: "New Item", href: "/", visible: true },
+                        ])
+                      }
+                      className="mt-3 rounded-lg border border-[#111a34] px-3 py-1.5 text-xs font-semibold text-[#111a34] hover:bg-[#111a34] hover:text-white"
+                    >
+                      Add Header Item
+                    </button>
+                  </div>
+
+                  <div className="mt-4 space-y-4">
+                    {footerLinkEditors.map((editor) => (
+                      <div key={editor.path} className="rounded-lg border border-gray-200 p-3">
+                        <h4 className="text-sm font-semibold text-[#1a2740]">{editor.title}</h4>
+                        <div className="mt-3 space-y-2">
+                          {editor.items.map((item, index) => (
+                            <div key={`${editor.path}-${index}`} className="grid gap-2 rounded-md border border-gray-100 bg-gray-50 p-2 md:grid-cols-[1fr_1fr_auto_auto]">
+                              <input
+                                type="text"
+                                value={item.label}
+                                onChange={(event) =>
+                                  updateLinkList(editor.path, (items) =>
+                                    items.map((entry, entryIndex) =>
+                                      entryIndex === index ? { ...entry, label: event.target.value.slice(0, 120) } : entry,
+                                    ),
+                                  )
+                                }
+                                placeholder="Link label"
+                                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                              />
+                              <input
+                                type="text"
+                                value={item.href}
+                                onChange={(event) =>
+                                  updateLinkList(editor.path, (items) =>
+                                    items.map((entry, entryIndex) =>
+                                      entryIndex === index ? { ...entry, href: event.target.value.slice(0, 320) } : entry,
+                                    ),
+                                  )
+                                }
+                                placeholder="/route-or-url"
+                                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                              />
+                              <label className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700">
+                                <input
+                                  type="checkbox"
+                                  checked={item.visible}
+                                  onChange={(event) =>
+                                    updateLinkList(editor.path, (items) =>
+                                      items.map((entry, entryIndex) =>
+                                        entryIndex === index ? { ...entry, visible: event.target.checked } : entry,
+                                      ),
+                                    )
+                                  }
+                                  className="h-4 w-4 rounded border-gray-300"
+                                />
+                                Show
+                              </label>
+                              <button
+                                type="button"
+                                disabled={editor.items.length <= 1}
+                                onClick={() =>
+                                  updateLinkList(editor.path, (items) =>
+                                    items.length <= 1 ? items : items.filter((_, entryIndex) => entryIndex !== index),
+                                  )
+                                }
+                                className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateLinkList(editor.path, (items) => [
+                              ...items,
+                              { label: "New Link", href: "/", visible: true },
+                            ])
+                          }
+                          className="mt-3 rounded-lg border border-[#111a34] px-3 py-1.5 text-xs font-semibold text-[#111a34] hover:bg-[#111a34] hover:text-white"
+                        >
+                          Add Footer Link
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 p-4">
+                  <h3 className="text-sm font-semibold text-[#1a2740]">Insights, Media, Profiles & Contact Controls</h3>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Configure insight categories, card lists, request rows, and communication channels.
+                  </p>
+
+                  <div className="mt-4 rounded-lg border border-gray-200 p-3">
+                    <h4 className="text-sm font-semibold text-[#1a2740]">Insights Categories</h4>
+                    <div className="mt-3 space-y-2">
+                      {insightsCategories.map((category, index) => (
+                        <div key={`insights-category-${index}`} className="grid gap-2 rounded-md border border-gray-100 bg-gray-50 p-2 md:grid-cols-[1fr_auto]">
+                          <input
+                            type="text"
+                            value={category}
+                            onChange={(event) =>
+                              updateStringList("siteContent.pages.insights.categories", (items) =>
+                                items.map((entry, entryIndex) =>
+                                  entryIndex === index ? event.target.value.slice(0, 100) : entry,
+                                ),
+                              )
+                            }
+                            placeholder="Category name"
+                            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                          />
+                          <button
+                            type="button"
+                            disabled={insightsCategories.length <= 1}
+                            onClick={() =>
+                              updateStringList("siteContent.pages.insights.categories", (items) =>
+                                items.length <= 1 ? items : items.filter((_, entryIndex) => entryIndex !== index),
+                              )
+                            }
+                            className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateStringList("siteContent.pages.insights.categories", (items) => [...items, "New Category"])
+                      }
+                      className="mt-3 rounded-lg border border-[#111a34] px-3 py-1.5 text-xs font-semibold text-[#111a34] hover:bg-[#111a34] hover:text-white"
+                    >
+                      Add Category
+                    </button>
+                  </div>
+
+                  <div className="mt-4 rounded-lg border border-gray-200 p-3">
+                    <h4 className="text-sm font-semibold text-[#1a2740]">Media Landscapes: What A Report Includes</h4>
+                    <div className="mt-3 space-y-2">
+                      {mediaLandscapeReportItems.map((item, index) => (
+                        <div key={`media-report-item-${index}`} className="grid gap-2 rounded-md border border-gray-100 bg-gray-50 p-2 md:grid-cols-[1fr_1fr_auto]">
+                          <input
+                            type="text"
+                            value={item.title}
+                            onChange={(event) =>
+                              updateTitleDescList("siteContent.pages.mediaLandscapes.reportContents.items", (items) =>
+                                items.map((entry, entryIndex) =>
+                                  entryIndex === index ? { ...entry, title: event.target.value.slice(0, 160) } : entry,
+                                ),
+                              )
+                            }
+                            placeholder="Item title"
+                            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                          />
+                          <input
+                            type="text"
+                            value={item.desc}
+                            onChange={(event) =>
+                              updateTitleDescList("siteContent.pages.mediaLandscapes.reportContents.items", (items) =>
+                                items.map((entry, entryIndex) =>
+                                  entryIndex === index ? { ...entry, desc: event.target.value.slice(0, 600) } : entry,
+                                ),
+                              )
+                            }
+                            placeholder="Item description"
+                            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                          />
+                          <button
+                            type="button"
+                            disabled={mediaLandscapeReportItems.length <= 1}
+                            onClick={() =>
+                              updateTitleDescList("siteContent.pages.mediaLandscapes.reportContents.items", (items) =>
+                                items.length <= 1 ? items : items.filter((_, entryIndex) => entryIndex !== index),
+                              )
+                            }
+                            className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateTitleDescList("siteContent.pages.mediaLandscapes.reportContents.items", (items) => [
+                          ...items,
+                          { title: "New Item", desc: "Describe this item." },
+                        ])
+                      }
+                      className="mt-3 rounded-lg border border-[#111a34] px-3 py-1.5 text-xs font-semibold text-[#111a34] hover:bg-[#111a34] hover:text-white"
+                    >
+                      Add Report Item
+                    </button>
+                  </div>
+
+                  <div className="mt-4 rounded-lg border border-gray-200 p-3">
+                    <h4 className="text-sm font-semibold text-[#1a2740]">Media Request Card Rows</h4>
+                    <div className="mt-3 space-y-2">
+                      {mediaLandscapeRequestRows.map((row, index) => (
+                        <div key={`media-request-row-${index}`} className="grid gap-2 rounded-md border border-gray-100 bg-gray-50 p-2 md:grid-cols-[1fr_1fr_auto]">
+                          <input
+                            type="text"
+                            value={row.label}
+                            onChange={(event) =>
+                              updateLabelValueList("siteContent.pages.mediaLandscapes.requestCard.pricingRows", (items) =>
+                                items.map((entry, entryIndex) =>
+                                  entryIndex === index ? { ...entry, label: event.target.value.slice(0, 160) } : entry,
+                                ),
+                              )
+                            }
+                            placeholder="Label"
+                            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                          />
+                          <input
+                            type="text"
+                            value={row.value}
+                            onChange={(event) =>
+                              updateLabelValueList("siteContent.pages.mediaLandscapes.requestCard.pricingRows", (items) =>
+                                items.map((entry, entryIndex) =>
+                                  entryIndex === index ? { ...entry, value: event.target.value.slice(0, 320) } : entry,
+                                ),
+                              )
+                            }
+                            placeholder="Value"
+                            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                          />
+                          <button
+                            type="button"
+                            disabled={mediaLandscapeRequestRows.length <= 1}
+                            onClick={() =>
+                              updateLabelValueList("siteContent.pages.mediaLandscapes.requestCard.pricingRows", (items) =>
+                                items.length <= 1 ? items : items.filter((_, entryIndex) => entryIndex !== index),
+                              )
+                            }
+                            className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateLabelValueList("siteContent.pages.mediaLandscapes.requestCard.pricingRows", (items) => [
+                          ...items,
+                          { label: "New Row", value: "" },
+                        ])
+                      }
+                      className="mt-3 rounded-lg border border-[#111a34] px-3 py-1.5 text-xs font-semibold text-[#111a34] hover:bg-[#111a34] hover:text-white"
+                    >
+                      Add Request Row
+                    </button>
+                  </div>
+
+                  <div className="mt-4 rounded-lg border border-gray-200 p-3">
+                    <h4 className="text-sm font-semibold text-[#1a2740]">Profiles CTA Rows</h4>
+                    <div className="mt-3 space-y-2">
+                      {profileCtaRows.map((row, index) => (
+                        <div key={`profiles-cta-row-${index}`} className="grid gap-2 rounded-md border border-gray-100 bg-gray-50 p-2 md:grid-cols-[1fr_1fr_auto]">
+                          <input
+                            type="text"
+                            value={row.label}
+                            onChange={(event) =>
+                              updateLabelValueList("siteContent.pages.profiles.cta.pricingRows", (items) =>
+                                items.map((entry, entryIndex) =>
+                                  entryIndex === index ? { ...entry, label: event.target.value.slice(0, 160) } : entry,
+                                ),
+                              )
+                            }
+                            placeholder="Label"
+                            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                          />
+                          <input
+                            type="text"
+                            value={row.value}
+                            onChange={(event) =>
+                              updateLabelValueList("siteContent.pages.profiles.cta.pricingRows", (items) =>
+                                items.map((entry, entryIndex) =>
+                                  entryIndex === index ? { ...entry, value: event.target.value.slice(0, 320) } : entry,
+                                ),
+                              )
+                            }
+                            placeholder="Value"
+                            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                          />
+                          <button
+                            type="button"
+                            disabled={profileCtaRows.length <= 1}
+                            onClick={() =>
+                              updateLabelValueList("siteContent.pages.profiles.cta.pricingRows", (items) =>
+                                items.length <= 1 ? items : items.filter((_, entryIndex) => entryIndex !== index),
+                              )
+                            }
+                            className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateLabelValueList("siteContent.pages.profiles.cta.pricingRows", (items) => [
+                          ...items,
+                          { label: "New Row", value: "" },
+                        ])
+                      }
+                      className="mt-3 rounded-lg border border-[#111a34] px-3 py-1.5 text-xs font-semibold text-[#111a34] hover:bg-[#111a34] hover:text-white"
+                    >
+                      Add Profile Row
+                    </button>
+                  </div>
+
+                  <div className="mt-4 rounded-lg border border-gray-200 p-3">
+                    <h4 className="text-sm font-semibold text-[#1a2740]">Contact Communication Channels</h4>
+                    <div className="mt-3 space-y-2">
+                      {contactChannels.map((channel, index) => (
+                        <div key={`contact-channel-${index}`} className="grid gap-2 rounded-md border border-gray-100 bg-gray-50 p-2 md:grid-cols-[1fr_1fr_1fr_120px_auto_auto]">
+                          <input
+                            type="text"
+                            value={channel.label}
+                            onChange={(event) =>
+                              updateContactChannelsList("siteContent.pages.contact.channels", (items) =>
+                                items.map((entry, entryIndex) =>
+                                  entryIndex === index ? { ...entry, label: event.target.value.slice(0, 120) } : entry,
+                                ),
+                              )
+                            }
+                            placeholder="Label"
+                            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                          />
+                          <input
+                            type="text"
+                            value={channel.value}
+                            onChange={(event) =>
+                              updateContactChannelsList("siteContent.pages.contact.channels", (items) =>
+                                items.map((entry, entryIndex) =>
+                                  entryIndex === index ? { ...entry, value: event.target.value.slice(0, 200) } : entry,
+                                ),
+                              )
+                            }
+                            placeholder="Displayed text"
+                            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                          />
+                          <input
+                            type="text"
+                            value={channel.href}
+                            onChange={(event) =>
+                              updateContactChannelsList("siteContent.pages.contact.channels", (items) =>
+                                items.map((entry, entryIndex) =>
+                                  entryIndex === index ? { ...entry, href: event.target.value.slice(0, 320) } : entry,
+                                ),
+                              )
+                            }
+                            placeholder="mailto: or https://"
+                            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                          />
+                          <select
+                            value={channel.type}
+                            onChange={(event) =>
+                              updateContactChannelsList("siteContent.pages.contact.channels", (items) =>
+                                items.map((entry, entryIndex) =>
+                                  entryIndex === index ? { ...entry, type: event.target.value.slice(0, 40) } : entry,
+                                ),
+                              )
+                            }
+                            className="rounded-lg border border-gray-200 bg-white px-2 py-2 text-sm"
+                          >
+                            {["email", "linkedin", "phone", "whatsapp", "telegram", "message", "website", "other"].map((option) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                            ))}
+                          </select>
+                          <label className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700">
+                            <input
+                              type="checkbox"
+                              checked={channel.visible}
+                              onChange={(event) =>
+                                updateContactChannelsList("siteContent.pages.contact.channels", (items) =>
+                                  items.map((entry, entryIndex) =>
+                                    entryIndex === index ? { ...entry, visible: event.target.checked } : entry,
+                                  ),
+                                )
+                              }
+                              className="h-4 w-4 rounded border-gray-300"
+                            />
+                            Show
+                          </label>
+                          <button
+                            type="button"
+                            disabled={contactChannels.length <= 1}
+                            onClick={() =>
+                              updateContactChannelsList("siteContent.pages.contact.channels", (items) =>
+                                items.length <= 1 ? items : items.filter((_, entryIndex) => entryIndex !== index),
+                              )
+                            }
+                            className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateContactChannelsList("siteContent.pages.contact.channels", (items) => [
+                          ...items,
+                          { label: "New Channel", value: "", href: "", type: "other", visible: true },
+                        ])
+                      }
+                      className="mt-3 rounded-lg border border-[#111a34] px-3 py-1.5 text-xs font-semibold text-[#111a34] hover:bg-[#111a34] hover:text-white"
+                    >
+                      Add Channel
+                    </button>
                   </div>
                 </div>
 

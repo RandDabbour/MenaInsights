@@ -110,6 +110,11 @@ type HeroOverlaySettings = {
   imageOpacity: number;
 };
 
+type PreviewRow = {
+  label: string;
+  value: string;
+};
+
 type FlatField = {
   path: string;
   value: string;
@@ -572,6 +577,25 @@ function normalizeHeroOverlaySettings(value: unknown): HeroOverlaySettings {
     subtitle: String(settings.subtitle ?? fallback.subtitle).slice(0, 320),
     imageOpacity: Number.isFinite(rawOpacity) ? Math.max(0, Math.min(100, rawOpacity)) : fallback.imageOpacity,
   };
+}
+
+function previewText(value: unknown, fallback = "—") {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+}
+
+function summarizeValues(values: unknown[], limit = 3) {
+  const entries = values
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean);
+  if (entries.length === 0) {
+    return "—";
+  }
+  const visible = entries.slice(0, limit).join(", ");
+  if (entries.length <= limit) {
+    return visible;
+  }
+  return `${visible} +${entries.length - limit} more`;
 }
 
 function flattenStringFields(value: unknown, prefix = ""): FlatField[] {
@@ -1416,6 +1440,157 @@ export function AdminPortal() {
     }
   };
 
+  const buildPreviewSections = (state: ContentState): Array<{ title: string; rows: PreviewRow[] }> => {
+    const site = state.siteContent;
+    const homepage = site.pages.homepage;
+    const about = site.pages.about;
+    const insights = site.pages.insights;
+    const media = site.pages.mediaLandscapes;
+    const profiles = site.pages.profiles;
+    const services = site.pages.services;
+    const briefs = site.pages.strategicBriefs;
+    const contact = site.pages.contact;
+    const request = site.pages.requestAnalysis;
+    const privacy = site.pages.privacy;
+    const terms = site.pages.terms;
+    const heroOverlay = normalizeHeroOverlaySettings(getByPath(state, "siteContent.pages.homepage.heroOverlay"));
+
+    return [
+      {
+        title: "Header",
+        rows: [
+          { label: "Brand", value: summarizeValues(site.header.brandLines) },
+          { label: "Navigation", value: summarizeValues(site.header.navigation.filter((item) => item?.visible !== false).map((item) => item.name), 5) },
+          { label: "CTA", value: previewText(site.header.ctaText) },
+        ],
+      },
+      {
+        title: "Hero",
+        rows: [
+          { label: "Image", value: previewText(state.homepage.heroImage, "No image selected") },
+          { label: "Overlay", value: heroOverlay.showText ? "Visible" : "Hidden" },
+          { label: "Image Opacity", value: `${heroOverlay.imageOpacity}%` },
+          { label: "Overlay Title", value: previewText(heroOverlay.title) },
+        ],
+      },
+      {
+        title: "Homepage",
+        rows: [
+          { label: "Services Intro", value: previewText(homepage.servicesIntro.title) },
+          { label: "Services Cards", value: `${homepage.services.length}` },
+          { label: "Reports Intro", value: previewText(homepage.reportsIntro.title) },
+          { label: "Reports", value: `${homepage.reports.length}` },
+          { label: "CTA", value: previewText(homepage.cta.title) },
+        ],
+      },
+      {
+        title: "About",
+        rows: [
+          { label: "Title", value: previewText(about.title) },
+          { label: "Intro Title", value: previewText(about.introTitle) },
+          { label: "Intro Paragraphs", value: `${about.introParagraphs.length}` },
+        ],
+      },
+      {
+        title: "Insights",
+        rows: [
+          { label: "Title", value: previewText(insights.title) },
+          { label: "Categories", value: summarizeValues(insights.categories, 5) },
+          { label: "Articles", value: `${insights.items.length}` },
+          { label: "First Article", value: previewText(insights.items[0]?.title) },
+        ],
+      },
+      {
+        title: "Media Landscapes",
+        rows: [
+          { label: "Title", value: previewText(media.title) },
+          { label: "Regions", value: `${media.regions.length}` },
+          { label: "Report Includes", value: `${media.reportContents.items.length} items` },
+          { label: "Request Card", value: previewText(media.requestCard.title) },
+        ],
+      },
+      {
+        title: "Profiles",
+        rows: [
+          { label: "Title", value: previewText(profiles.title) },
+          { label: "Profile Types", value: `${profiles.profileTypes.length}` },
+          { label: "Sample Profiles", value: `${profiles.sampleWork.items.length}` },
+          { label: "CTA", value: previewText(profiles.cta.title) },
+        ],
+      },
+      {
+        title: "Services",
+        rows: [
+          { label: "Title", value: previewText(services.title) },
+          { label: "Service Cards", value: `${services.cards.length}` },
+          { label: "Process Steps", value: `${services.process.steps.length}` },
+          { label: "Show Pricing", value: services.showPricing ? "Yes" : "No" },
+        ],
+      },
+      {
+        title: "Strategic Briefs",
+        rows: [
+          { label: "Title", value: previewText(briefs.title) },
+          { label: "Brief Types", value: `${briefs.briefTypes.length}` },
+          { label: "Sample Briefs", value: `${briefs.sampleWork.items.length}` },
+          { label: "Show Pricing", value: briefs.showPricing ? "Yes" : "No" },
+        ],
+      },
+      {
+        title: "Request Analysis",
+        rows: [
+          { label: "Title", value: previewText(request.header.title) },
+          { label: "Service Options", value: `${request.serviceOptions.length}` },
+          { label: "Timeline Options", value: `${request.urgencyOptions.length}` },
+          { label: "Budget Field", value: request.showBudgetField ? "Visible" : "Hidden" },
+        ],
+      },
+      {
+        title: "Contact",
+        rows: [
+          { label: "Title", value: previewText(contact.header.title) },
+          { label: "Channels", value: `${contact.channels?.filter((channel) => channel?.visible !== false).length || 0}` },
+          { label: "Form Title", value: previewText(contact.formTitle) },
+          { label: "Sidebar CTA", value: previewText(contact.sidebarCard.cta) },
+        ],
+      },
+      {
+        title: "Footer",
+        rows: [
+          { label: "Brand", value: previewText(site.footer.brandName) },
+          { label: "Services Links", value: `${site.footer.servicesLinks.filter((item) => item?.visible !== false).length}` },
+          { label: "Resources Links", value: `${site.footer.resourcesLinks.filter((item) => item?.visible !== false).length}` },
+          { label: "Connect Links", value: `${site.footer.connectLinks.filter((item) => item?.visible !== false).length}` },
+        ],
+      },
+      {
+        title: "Legal",
+        rows: [
+          { label: "Privacy Title", value: previewText(privacy.title) },
+          { label: "Privacy Sections", value: `${privacy.sections.length}` },
+          { label: "Terms Title", value: previewText(terms.title) },
+          { label: "Terms Sections", value: `${terms.sections.length}` },
+        ],
+      },
+    ];
+  };
+
+  const renderRows = (rows: PreviewRow[]) => {
+    return (
+      <div className="space-y-2">
+        {rows.map((row) => (
+          <div key={row.label} className="rounded-md border border-gray-100 bg-gray-50 px-3 py-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{row.label}</p>
+            <p className="mt-1 text-xs text-[#1a2740]">{row.value}</p>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const currentPreviewSections = buildPreviewSections(contentState);
+  const draftPreviewSections = buildPreviewSections(contentDraft);
+
   const renderContentSnapshot = (state: ContentState, overlay: HeroOverlaySettings) => {
     return (
       <div className="overflow-hidden rounded-xl border border-gray-200">
@@ -1866,6 +2041,36 @@ export function AdminPortal() {
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Draft Hero Image</p>
                   <p className="mt-1 break-all text-xs text-gray-700">{contentDraft.homepage.heroImage || "No image selected"}</p>
                 </div>
+              </div>
+            </div>
+
+            <div className="mb-6 rounded-xl border border-gray-200 p-4">
+              <h3 className="text-sm font-semibold text-[#1a2740]">All Pages Live Preview (Current vs Draft)</h3>
+              <p className="mt-1 text-xs text-gray-500">
+                Each section shows published content on the left and your draft on the right so you can see exactly where edits will reflect.
+              </p>
+
+              <div className="mt-4 grid gap-4">
+                {currentPreviewSections.map((section, index) => {
+                  const draftSection = draftPreviewSections[index] || section;
+                  return (
+                    <div key={section.title} className="rounded-xl border border-gray-200">
+                      <div className="border-b border-gray-200 bg-gray-50 px-4 py-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-[#1a2740]">{section.title}</p>
+                      </div>
+                      <div className="grid gap-4 p-4 lg:grid-cols-2">
+                        <div>
+                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Current</p>
+                          {renderRows(section.rows)}
+                        </div>
+                        <div>
+                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#111a34]">Draft</p>
+                          {renderRows(draftSection.rows)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 

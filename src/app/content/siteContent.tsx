@@ -59,6 +59,12 @@ export const DEFAULT_SITE_CONTENT = {
     homepage: {
       heroImage: "",
       heroAlt: "Middle East Media Insights hero",
+      heroOverlay: {
+        showText: false,
+        title: "Middle East Media Insights",
+        subtitle: "Independent media analysis and strategic intelligence for the MENA region.",
+        imageOpacity: 100,
+      },
       servicesIntro: {
         eyebrow: "What I Offer",
         title: "Request the intelligence you need",

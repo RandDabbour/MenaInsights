@@ -10,6 +10,14 @@ export function Homepage() {
   const { siteContent } = useSiteContent();
   const homepage = siteContent.pages.homepage;
   const showReportPrices = homepage.reportsIntro.showPrices !== false;
+  const heroOverlay = homepage.heroOverlay || {};
+  const heroShowText = heroOverlay.showText === true;
+  const heroTitle = String(heroOverlay.title || "").trim();
+  const heroSubtitle = String(heroOverlay.subtitle || "").trim();
+  const rawHeroOpacity = Number(heroOverlay.imageOpacity);
+  const heroImageOpacity = Number.isFinite(rawHeroOpacity)
+    ? Math.max(0, Math.min(100, rawHeroOpacity))
+    : 100;
 
   const services = homepage.services.map((service, index) => ({
     ...service,
@@ -19,12 +27,28 @@ export function Homepage() {
   return (
     <div className="bg-white">
       <section className="bg-[#efe7df]">
-        <div className="mx-auto max-w-[1536px]">
+        <div className="relative mx-auto max-w-[1536px]">
           <ImageWithFallback
             src={homepage.heroImage || heroScene}
             alt={homepage.heroAlt}
             className="block w-full h-auto"
+            style={{ opacity: heroImageOpacity / 100 }}
           />
+          {heroShowText && (heroTitle || heroSubtitle) ? (
+            <div className="pointer-events-none absolute inset-0 flex items-start justify-center px-6 pt-10 text-center sm:pt-14">
+              <div className="max-w-3xl rounded-2xl bg-[#111a34]/45 px-5 py-4 backdrop-blur-[2px]">
+                {heroTitle ? (
+                  <h1
+                    className="text-2xl font-semibold text-white sm:text-4xl"
+                    style={{ fontFamily: "'Playfair Display', serif" }}
+                  >
+                    {heroTitle}
+                  </h1>
+                ) : null}
+                {heroSubtitle ? <p className="mt-2 text-sm text-white/90 sm:text-base">{heroSubtitle}</p> : null}
+              </div>
+            </div>
+          ) : null}
         </div>
       </section>
 

@@ -103,6 +103,13 @@ type ContactChannelItem = {
   visible: boolean;
 };
 
+type HeroOverlaySettings = {
+  showText: boolean;
+  title: string;
+  subtitle: string;
+  imageOpacity: number;
+};
+
 type FlatField = {
   path: string;
   value: string;
@@ -526,6 +533,34 @@ function normalizeContactChannelItem(value: unknown): ContactChannelItem {
     href: String(item.href ?? "").slice(0, 320),
     type: String(item.type ?? "other").slice(0, 40) || "other",
     visible: item.visible !== false,
+  };
+}
+
+function normalizeHeroOverlaySettings(value: unknown): HeroOverlaySettings {
+  const fallback: HeroOverlaySettings = {
+    showText: false,
+    title: "Middle East Media Insights",
+    subtitle: "Independent media analysis and strategic intelligence for the MENA region.",
+    imageOpacity: 100,
+  };
+
+  if (!value || typeof value !== "object") {
+    return fallback;
+  }
+
+  const settings = value as {
+    showText?: unknown;
+    title?: unknown;
+    subtitle?: unknown;
+    imageOpacity?: unknown;
+  };
+  const rawOpacity = Number(settings.imageOpacity);
+
+  return {
+    showText: settings.showText === true,
+    title: String(settings.title ?? fallback.title).slice(0, 160),
+    subtitle: String(settings.subtitle ?? fallback.subtitle).slice(0, 320),
+    imageOpacity: Number.isFinite(rawOpacity) ? Math.max(0, Math.min(100, rawOpacity)) : fallback.imageOpacity,
   };
 }
 
@@ -1152,6 +1187,16 @@ export function AdminPortal() {
     return raw.map((entry) => normalizeContactChannelItem(entry));
   }, [contentDraft]);
 
+  const draftHeroOverlay = useMemo(
+    () => normalizeHeroOverlaySettings(getByPath(contentDraft, "siteContent.pages.homepage.heroOverlay")),
+    [contentDraft],
+  );
+
+  const currentHeroOverlay = useMemo(
+    () => normalizeHeroOverlaySettings(getByPath(contentState, "siteContent.pages.homepage.heroOverlay")),
+    [contentState],
+  );
+
   const footerLinkEditors = [
     {
       title: "Footer Services Links",
@@ -1352,6 +1397,80 @@ export function AdminPortal() {
     } catch (err) {
       setApiError(err instanceof Error ? err.message : "Unable to update settings");
     }
+  };
+
+  const renderContentSnapshot = (state: ContentState, overlay: HeroOverlaySettings) => {
+    return (
+      <div className="overflow-hidden rounded-xl border border-gray-200">
+        <div className="bg-[#111a34] px-4 py-4 text-white">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="leading-none" style={{ fontFamily: "'Playfair Display', serif" }}>
+              <span className="block text-[11px] uppercase tracking-[0.2em] text-white/70">
+                {state.siteContent.header.brandLines[0] || ""}
+              </span>
+              <span className="block text-xl font-semibold leading-[0.9] text-[#d4af37]">
+                {state.siteContent.header.brandLines[1] || ""}
+              </span>
+              <span className="block text-lg font-semibold text-[#dbe5f5]">
+                {state.siteContent.header.brandLines[2] || ""}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-white/80">
+              {state.siteContent.header.navigation.filter((item) => item?.visible !== false).map((item) => (
+                <span key={`${item.name}-${item.href}`}>{item.name}</span>
+              ))}
+            </div>
+            <span className="rounded-md bg-[#d4af37] px-3 py-1 text-[11px] font-semibold text-[#111a34]">
+              {state.siteContent.header.ctaText}
+            </span>
+          </div>
+        </div>
+
+        <div className="relative bg-[#efe7df]">
+          {state.homepage.heroImage ? (
+            <>
+              <img
+                src={state.homepage.heroImage}
+                alt={state.homepage.heroAlt || "Hero preview"}
+                className="h-44 w-full object-cover sm:h-56"
+                style={{ opacity: overlay.imageOpacity / 100 }}
+              />
+              {overlay.showText && (overlay.title || overlay.subtitle) ? (
+                <div className="pointer-events-none absolute inset-0 flex items-start justify-center px-4 pt-6 text-center sm:pt-8">
+                  <div className="max-w-xl rounded-2xl bg-[#111a34]/45 px-4 py-3 text-white backdrop-blur-[2px]">
+                    {overlay.title ? (
+                      <h4 className="text-base font-semibold sm:text-xl" style={{ fontFamily: "'Playfair Display', serif" }}>
+                        {overlay.title}
+                      </h4>
+                    ) : null}
+                    {overlay.subtitle ? <p className="mt-1 text-xs text-white/90 sm:text-sm">{overlay.subtitle}</p> : null}
+                  </div>
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <div className="flex h-44 items-center justify-center text-sm text-gray-500 sm:h-56">
+              No hero image set
+            </div>
+          )}
+        </div>
+
+        <div className="grid gap-3 bg-[#111a34] px-4 py-4 text-[11px] text-white/80 sm:grid-cols-3">
+          <div>
+            <p className="mb-1 text-white">{state.siteContent.footer.servicesTitle}</p>
+            <p>{state.siteContent.footer.servicesLinks.find((item) => item?.visible !== false)?.label || ""}</p>
+          </div>
+          <div>
+            <p className="mb-1 text-white">{state.siteContent.footer.resourcesTitle}</p>
+            <p>{state.siteContent.footer.resourcesLinks.find((item) => item?.visible !== false)?.label || ""}</p>
+          </div>
+          <div>
+            <p className="mb-1 text-white">{state.siteContent.footer.connectTitle}</p>
+            <p>{state.siteContent.footer.social.linkedinUrl}</p>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   if (!token) {
@@ -1692,61 +1811,33 @@ export function AdminPortal() {
             </div>
 
             <div className="mb-6 rounded-xl border border-gray-200 p-4">
-              <h3 className="text-sm font-semibold text-[#1a2740]">Current Layout Preview</h3>
-              <p className="mt-1 text-xs text-gray-500">Header, homepage hero, and footer snapshot from current content draft.</p>
+              <h3 className="text-sm font-semibold text-[#1a2740]">Live Preview: Current vs Draft</h3>
+              <p className="mt-1 text-xs text-gray-500">
+                Left side shows the currently published site. Right side shows your edit draft in real time.
+              </p>
+              <p className="mt-2 text-xs text-amber-700">
+                Hero note: if your image already contains text, keep hero overlay text hidden to avoid duplicated text.
+              </p>
 
-              <div className="mt-4 overflow-hidden rounded-xl border border-gray-200">
-                <div className="bg-[#111a34] px-4 py-4 text-white">
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div className="leading-none" style={{ fontFamily: "'Playfair Display', serif" }}>
-                      <span className="block text-[11px] uppercase tracking-[0.2em] text-white/70">
-                        {contentDraft.siteContent.header.brandLines[0] || ""}
-                      </span>
-                      <span className="block text-xl font-semibold leading-[0.9] text-[#d4af37]">
-                        {contentDraft.siteContent.header.brandLines[1] || ""}
-                      </span>
-                      <span className="block text-lg font-semibold text-[#dbe5f5]">
-                        {contentDraft.siteContent.header.brandLines[2] || ""}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-white/80">
-                      {contentDraft.siteContent.header.navigation.filter((item) => item?.visible !== false).map((item) => (
-                        <span key={`${item.name}-${item.href}`}>{item.name}</span>
-                      ))}
-                    </div>
-                    <span className="rounded-md bg-[#d4af37] px-3 py-1 text-[11px] font-semibold text-[#111a34]">
-                      {contentDraft.siteContent.header.ctaText}
-                    </span>
-                  </div>
+              <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Current Published</p>
+                  {renderContentSnapshot(contentState, currentHeroOverlay)}
                 </div>
-
-                <div className="bg-[#efe7df]">
-                  {contentDraft.homepage.heroImage ? (
-                    <img
-                      src={contentDraft.homepage.heroImage}
-                      alt={contentDraft.homepage.heroAlt || "Hero preview"}
-                      className="h-44 w-full object-cover sm:h-56"
-                    />
-                  ) : (
-                    <div className="flex h-44 items-center justify-center text-sm text-gray-500 sm:h-56">
-                      No hero image set
-                    </div>
-                  )}
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#111a34]">Editing Draft (Live)</p>
+                  {renderContentSnapshot(contentDraft, draftHeroOverlay)}
                 </div>
+              </div>
 
-                <div className="grid gap-3 bg-[#111a34] px-4 py-4 text-[11px] text-white/80 sm:grid-cols-3">
-                  <div>
-                    <p className="mb-1 text-white">{contentDraft.siteContent.footer.servicesTitle}</p>
-                    <p>{contentDraft.siteContent.footer.servicesLinks.find((item) => item?.visible !== false)?.label || ""}</p>
-                  </div>
-                  <div>
-                    <p className="mb-1 text-white">{contentDraft.siteContent.footer.resourcesTitle}</p>
-                    <p>{contentDraft.siteContent.footer.resourcesLinks.find((item) => item?.visible !== false)?.label || ""}</p>
-                  </div>
-                  <div>
-                    <p className="mb-1 text-white">{contentDraft.siteContent.footer.connectTitle}</p>
-                    <p>{contentDraft.siteContent.footer.social.linkedinUrl}</p>
-                  </div>
+              <div className="mt-4 grid gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 sm:grid-cols-2">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Current Hero Image</p>
+                  <p className="mt-1 break-all text-xs text-gray-700">{contentState.homepage.heroImage || "No image selected"}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Draft Hero Image</p>
+                  <p className="mt-1 break-all text-xs text-gray-700">{contentDraft.homepage.heroImage || "No image selected"}</p>
                 </div>
               </div>
             </div>
@@ -1821,6 +1912,64 @@ export function AdminPortal() {
                         </div>
                       );
                     })}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 p-4">
+                  <h3 className="text-sm font-semibold text-[#1a2740]">Hero Image & Text Overlay Controls</h3>
+                  <p className="mt-1 text-xs text-gray-500">
+                    If your hero image already includes text, keep overlay text hidden to avoid duplicate text on the hero.
+                  </p>
+
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3">
+                      <input
+                        type="checkbox"
+                        checked={draftHeroOverlay.showText}
+                        onChange={(event) => updateDraftValue("siteContent.pages.homepage.heroOverlay.showText", event.target.checked)}
+                        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#111a34] focus:ring-[#111a34]"
+                      />
+                      <span>
+                        <span className="block text-sm font-semibold text-[#1a2740]">Show overlay text on hero image</span>
+                        <span className="block text-xs text-gray-500">Turn off to show the hero image only.</span>
+                      </span>
+                    </label>
+
+                    <div className="rounded-lg border border-gray-200 p-3">
+                      <label className="block text-sm font-semibold text-[#1a2740]">Hero image opacity ({draftHeroOverlay.imageOpacity}%)</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={draftHeroOverlay.imageOpacity}
+                        onChange={(event) =>
+                          updateDraftValue("siteContent.pages.homepage.heroOverlay.imageOpacity", Number(event.target.value))
+                        }
+                        className="mt-3 w-full accent-[#111a34]"
+                      />
+                      <p className="mt-2 text-xs text-gray-500">100% keeps the original image intensity.</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Overlay Title</label>
+                      <input
+                        type="text"
+                        value={draftHeroOverlay.title}
+                        onChange={(event) => updateDraftField("siteContent.pages.homepage.heroOverlay.title", event.target.value)}
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Overlay Subtitle</label>
+                      <input
+                        type="text"
+                        value={draftHeroOverlay.subtitle}
+                        onChange={(event) => updateDraftField("siteContent.pages.homepage.heroOverlay.subtitle", event.target.value)}
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                      />
+                    </div>
                   </div>
                 </div>
 
